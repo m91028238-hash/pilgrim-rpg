@@ -335,20 +335,20 @@ class Game {
     const P = () => this.player; const zone = document.getElementById('joyZone'), base = document.getElementById('joyBase'), knob = document.getElementById('joyKnob');
     const home = () => { base.style.left = ''; base.style.top = ''; base.style.bottom = ''; knob.style.transform = ''; base.classList.remove('sprint'); };
     let joyId = null, ox = 0, oy = 0;
-    zone.addEventListener('pointerdown', e => { e.preventDefault(); this.audio.init(); joyId = e.pointerId; zone.setPointerCapture(e.pointerId); ox = e.clientX; oy = e.clientY; base.style.left = (ox - 58) + 'px'; base.style.top = (oy - 58) + 'px'; base.style.bottom = 'auto'; });
+    zone.addEventListener('pointerdown', e => { e.preventDefault(); this.audio.init(); joyId = e.pointerId; try { zone.setPointerCapture(e.pointerId); } catch (_) { } ox = e.clientX; oy = e.clientY; base.style.left = (ox - 58) + 'px'; base.style.top = (oy - 58) + 'px'; base.style.bottom = 'auto'; });
     zone.addEventListener('pointermove', e => { if (e.pointerId !== joyId) return; let dx = e.clientX - ox, dy = e.clientY - oy; const d = Math.hypot(dx, dy), R = 50; const k = d > R ? R / d : 1; knob.style.transform = `translate(${dx * k}px,${dy * k}px)`; const m = Math.min(1, d / R); this.joy = { x: d ? dx / d * m : 0, y: d ? -dy / d * m : 0, sprint: d > R * 1.35 }; base.classList.toggle('sprint', d > R * 1.35); });
     const jend = e => { if (e.pointerId !== joyId) return; joyId = null; this.joy = null; home(); };
     zone.addEventListener('pointerup', jend); zone.addEventListener('pointercancel', jend);
     // camera drag on canvas (touch: anywhere not on UI; mouse: drag or pointer lock)
     const cv = this.renderer.domElement; const drags = new Map();
-    cv.addEventListener('pointerdown', e => { this.audio.init(); if (e.pointerType === 'mouse') { if (this.state === 'play' && !document.pointerLockElement && !this.uiOpen()) cv.requestPointerLock?.(); if (document.pointerLockElement) { if (e.button === 0) P().light(); if (e.button === 2) this.mouseBlock = true; return; } } drags.set(e.pointerId, { x: e.clientX, y: e.clientY }); cv.setPointerCapture(e.pointerId); });
+    cv.addEventListener('pointerdown', e => { this.audio.init(); if (e.pointerType === 'mouse') { if (this.state === 'play' && !document.pointerLockElement && !this.uiOpen()) cv.requestPointerLock?.(); if (document.pointerLockElement) { if (e.button === 0) P().light(); if (e.button === 2) this.mouseBlock = true; return; } } drags.set(e.pointerId, { x: e.clientX, y: e.clientY }); try { cv.setPointerCapture(e.pointerId); } catch (_) { } });
     cv.addEventListener('pointermove', e => { if (document.pointerLockElement === cv) { this.look(e.movementX, e.movementY, 0.0028); return; } const d = drags.get(e.pointerId); if (!d) return; this.look(e.clientX - d.x, e.clientY - d.y, 0.0062); d.x = e.clientX; d.y = e.clientY; });
     const dend = e => { drags.delete(e.pointerId); if (e.button === 2) this.mouseBlock = false; }; cv.addEventListener('pointerup', dend); cv.addEventListener('pointercancel', dend);
     addEventListener('mouseup', e => { if (e.button === 2) this.mouseBlock = false; });
     cv.addEventListener('contextmenu', e => e.preventDefault());
     cv.addEventListener('wheel', e => { this.cam.dist = clamp(this.cam.dist + e.deltaY * 0.004, 2.4, 7); }, { passive: true });
     // buttons
-    const btn = (id, down, up) => { const b = document.getElementById(id); b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); this.audio.init(); b.classList.add('on'); b.setPointerCapture(e.pointerId); down(); }); const u = e => { b.classList.remove('on'); up && up(); }; b.addEventListener('pointerup', u); b.addEventListener('pointercancel', u); };
+    const btn = (id, down, up) => { const b = document.getElementById(id); b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); this.audio.init(); b.classList.add('on'); try { b.setPointerCapture(e.pointerId); } catch (_) { } down(); }); const u = e => { b.classList.remove('on'); up && up(); }; b.addEventListener('pointerup', u); b.addEventListener('pointercancel', u); };
     btn('aAtk', () => P().light());
     btn('aHeavy', () => P().heavy()); btn('aRoll', () => P().roll(P().intent?.dx || 0, P().intent?.dz || 0)); btn('aBlock', () => this.btnBlock = true, () => this.btnBlock = false);
     btn('aPray', () => P().pray()); btn('aLock', () => this.toggleLock());
