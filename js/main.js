@@ -216,7 +216,10 @@ function spawnEnemy(type, x, z, lvlBoost = 0) {
   return e;
 }
 
+let enemiesPopulated = false;
 function populateEnemies() {
+  if (enemiesPopulated) return;
+  enemiesPopulated = true;
   // Wolves in forest
   for (let i = 0; i < 8; i++) spawnEnemy('wolf', 120 + (Math.random() - 0.5) * 60, -100 + (Math.random() - 0.5) * 60);
   for (let i = 0; i < 6; i++) spawnEnemy('boar', -40 + (Math.random() - 0.5) * 100, -60 + (Math.random() - 0.5) * 80);
