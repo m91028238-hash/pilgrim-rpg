@@ -1,0 +1,32 @@
+import * as THREE from 'three';
+import { GLTFLoader } from '../vendor/addons/loaders/GLTFLoader.js?v=3';
+import { RGBELoader } from '../vendor/addons/loaders/RGBELoader.js?v=3';
+import { MeshoptDecoder } from '../vendor/addons/libs/meshopt_decoder.module.js?v=3';
+
+export const V = 3; // asset cache-bust
+const MANIFEST = [
+  ['human_m', 'assets/human_m.glb', 1.5], ['human_f', 'assets/human_f.glb', 1.4], ['anims', 'assets/anims.glb', 1.1],
+  ['village', 'assets/village.glb', 1.2], ['nature', 'assets/nature.glb', 1.6], ['wolf', 'assets/wolf.glb', 0.3],
+  ['boar', 'assets/boar.glb', 0.03], ['cow', 'assets/cow.glb', 0.3],
+];
+const TEX = ['grass', 'path', 'rock', 'cobble', 'forest'];
+
+export async function loadAll(onProgress = () => {}) {
+  const mgr = new THREE.LoadingManager();
+  const gl = new GLTFLoader(mgr); gl.setMeshoptDecoder(MeshoptDecoder);
+  const tl = new THREE.TextureLoader(mgr);
+  const total = MANIFEST.reduce((a, m) => a + m[2], 0) + 1.5 + 1.4;
+  const done = {}; const report = () => onProgress(Math.min(1, Object.values(done).reduce((a, b) => a + b, 0) / total));
+  const out = { tex: {} };
+  const jobs = MANIFEST.map(([k, url, mb]) => new Promise((res, rej) => gl.load(url + '?v=' + V, g => { out[k] = g; done[k] = mb; report(); res(); },
+    e => { if (e.total) { done[k] = mb * e.loaded / e.total; report(); } }, rej)));
+  for (const t of TEX) for (const s of ['d', 'n']) jobs.push(new Promise((res, rej) => tl.load(`assets/tex/${t}_${s}.jpg?v=${V}`, tx => {
+    tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.anisotropy = 4; if (s === 'd') tx.colorSpace = THREE.SRGBColorSpace;
+    out.tex[t + '_' + s] = tx; done['t' + t + s] = 0.15; report(); res();
+  }, undefined, rej)));
+  jobs.push(new Promise((res, rej) => new RGBELoader(mgr).load('assets/env/sky_1k.hdr?v=' + V, h => { h.mapping = THREE.EquirectangularReflectionMapping; out.hdr = h; done.hdr = 1.4; report(); res(); }, undefined, rej)));
+  await Promise.all(jobs);
+  out.clips = {}; for (const c of out.anims.animations) out.clips[c.name] = c;
+  for (const k of ['wolf', 'boar', 'cow']) out[k].clipMap = Object.fromEntries(out[k].animations.map(c => [c.name, c]));
+  return out;
+}

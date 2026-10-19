@@ -103,6 +103,9 @@ export const ITEMS = {
   lost_letter:{id:'lost_letter',name:'Lost Letter',cat:'quest',ico:'✉️',r:'common',desc:'A letter for delivery.'},
   chapel_key:{id:'chapel_key',name:'Chapel Key',cat:'quest',ico:'🔑',r:'uncommon',desc:'Opens the ruined chapel chest.'},
   bandit_token:{id:'bandit_token',name:'Bandit Token',cat:'quest',ico:'☠️',r:'uncommon',desc:'Proof of cleared camp.'},
+  chalice:{id:'chalice',name:'Stolen Chalice',cat:'quest',ico:'🏆',r:'rare',desc:'Taken from Villafranca church.'},
+  compostela:{id:'compostela',name:'Compostela',cat:'quest',ico:'📜',r:'blessed',desc:'Certificate of your pilgrimage.'},
+  mushroom:{id:'mushroom',name:'Mushroom',cat:'mat',ico:'🍄',r:'common',desc:'Good in stew.'},
   shrine_oil:{id:'shrine_oil',name:'Shrine Oil',cat:'consumable',ico:'🫙',r:'uncommon',desc:'For lighting shrines.',use:'oil'},
 };
 
@@ -168,17 +171,18 @@ export const RECIPES = [
 ];
 
 export const MAIN_QUEST = [
-  {id:'mq1',name:'First Steps',desc:'Visit the village shrine and rest.',obj:'visit_shrine',target:'shrine_start',xp:40,coin:10},
-  {id:'mq2',name:'Staff of the Way',desc:'Craft or obtain a Wood Staff.',obj:'have_item',item:'wood_staff',xp:50,coin:15},
-  {id:'mq3',name:'Roadside Charity',desc:'Deliver bread to the poor near the village.',obj:'deliver',npc:'poor_1',item:'bread',xp:60,coin:20},
-  {id:'mq4',name:'Through the Woods',desc:'Reach the forest shrine (north-east).',obj:'visit_shrine',target:'shrine_forest',xp:80,coin:25},
-  {id:'mq5',name:'Bandit Trouble',desc:'Clear the bandit camp and take a token.',obj:'have_item',item:'bandit_token',xp:120,coin:50},
-  {id:'mq6',name:'Ruined Chapel',desc:'Find the chapel key and open the chest.',obj:'visit',target:'chapel_chest',xp:100,coin:40},
-  {id:'mq7',name:'Town of Faith',desc:'Enter Santiago town and speak to the priest.',obj:'talk',npc:'priest',xp:90,coin:30},
-  {id:'mq8',name:'Light the Shrines',desc:'Light candles at 3 shrines.',obj:'light_shrines',count:3,xp:110,coin:45},
-  {id:'mq9',name:'Night Vigil',desc:'Survive until dawn after accepting (cast out 3 demons).',obj:'kill',enemy:'demon',count:3,xp:150,coin:60},
-  {id:'mq10',name:'The Cathedral',desc:'Reach Santiago Cathedral and pray.',obj:'visit',target:'cathedral',xp:200,coin:100},
-  {id:'mq11',name:'Compostela',desc:'Offer a prayer at the high altar (pray at cathedral).',obj:'pray_cathedral',xp:250,coin:150},
+  {id:'mq1',name:'First Steps',desc:'Rest at the San Roque shrine.',why:'Shrines save your progress and become your respawn point.',obj:'visit_shrine',target:'shrine_start',xp:40,coin:10},
+  {id:'mq2',name:'Staff of the Way',desc:'Craft a Wood Staff at the workbench (5 wood + walking stick).',why:'Logs lie around the village edges.',obj:'have_item',item:'wood_staff',target:'bench',xp:50,coin:15},
+  {id:'mq3',name:'Roadside Charity',desc:'Give bread to Old Tomás.',why:'He sits by the village well.',obj:'deliver',npc:'poor_1',item:'bread',target:'poor_1',xp:60,coin:20},
+  {id:'mq4',name:'The Old Bridge',desc:'Follow the Camino east and rest at the River Shrine.',why:'Follow the yellow scallop markers.',obj:'visit_shrine',target:'shrine_river',xp:80,coin:25},
+  {id:'mq5',name:'Villafranca',desc:'Speak with Sister Inés at the Villafranca church.',obj:'talk',npc:'sister',target:'hamlet_church',xp:70,coin:20},
+  {id:'mq6',name:'Wolves on the Road',desc:'Drive off 3 wolves from the Wolf Woods.',why:'Block (hold) when a wolf crouches to lunge; dodge its bite.',obj:'kill',enemy:'wolf',count:3,target:'forest',xp:120,coin:40},
+  {id:'mq7',name:'The Stolen Chalice',desc:'Recover the chalice from the bandit camp in the western hills.',why:'The chief keeps it. Bandits hit hard; level 4+ advised.',obj:'have_item',item:'chalice',target:'bandit_camp',xp:160,coin:60},
+  {id:'mq8',name:'Return the Chalice',desc:'Bring the chalice back to Sister Inés.',obj:'deliver',npc:'sister',item:'chalice',target:'hamlet_church',xp:120,coin:50},
+  {id:'mq9',name:'The Ruined Chapel',desc:'Find the chapel key and open the reliquary in the woods.',why:'The key glints somewhere just outside the ruin.',obj:'visit',target:'chapel_chest',xp:140,coin:50},
+  {id:'mq10',name:'Night Vigil',desc:'Cast out 3 shadows with prayer.',why:'Shadows only walk after dusk. Rest at a shrine to wait for night, then press Pray near them.',obj:'kill',enemy:'demon',count:3,xp:180,coin:70},
+  {id:'mq11',name:'Santiago',desc:'Reach Santiago and speak with Father Anselm.',obj:'talk',npc:'priest',target:'priest',xp:150,coin:60},
+  {id:'mq12',name:'Compostela',desc:'Pray at the Cathedral of Santiago.',obj:'pray_cathedral',target:'cathedral',xp:300,coin:150},
 ];
 
 export const SIDE_TEMPLATES = [
@@ -229,11 +233,11 @@ export const SHOPS = {
 };
 
 export const ENEMY_TYPES = {
-  wolf:{name:'Wolf',hp:40,atk:8,speed:3.2,xp:18,coin:3,color:0x555555,scale:0.9,drop:{meat:0.7,leather:0.3}},
-  boar:{name:'Boar',hp:55,atk:10,speed:2.6,xp:22,coin:4,color:0x6b4423,scale:1.0,drop:{meat:0.8,leather:0.4}},
-  bandit:{name:'Bandit',hp:70,atk:12,speed:2.8,xp:30,coin:12,color:0x4a3020,scale:1.0,drop:{cloth:0.4,iron_ore:0.15}},
-  bandit_chief:{name:'Bandit Chief',hp:140,atk:18,speed:2.5,xp:80,coin:40,color:0x3a2010,scale:1.15,drop:{bandit_token:1,iron_ingot:0.5}},
-  demon:{name:'Shadow',hp:60,atk:14,speed:3.0,xp:40,coin:8,color:0x1a0a2a,scale:1.05,holyOnly:true,drop:{wax:0.3,salt:0.2}},
+  wolf:{name:'Wolf',hp:42,atk:7,speed:5.2,walk:1.6,xp:18,coin:2,aggro:15,range:1.9,tele:0.55,drop:{meat:0.7,leather:0.35}},
+  boar:{name:'Boar',hp:60,atk:10,speed:7.5,walk:1.3,xp:24,coin:3,aggro:11,range:1.6,tele:0.85,charge:true,drop:{meat:0.85,leather:0.45}},
+  bandit:{name:'Bandit',hp:75,atk:11,speed:4.0,walk:1.4,xp:34,coin:12,aggro:17,range:2.0,tele:0.6,human:true,drop:{cloth:0.5,iron_ore:0.2,bread:0.3}},
+  bandit_chief:{name:'Bandit Chief',hp:190,atk:17,speed:3.8,walk:1.3,xp:120,coin:45,aggro:18,range:2.2,tele:0.7,human:true,boss:true,drop:{chalice:1,iron_ingot:0.6,leather_jerkin:0.25}},
+  demon:{name:'Shadow',hp:55,atk:12,speed:3.4,walk:1.2,xp:45,coin:6,aggro:22,range:1.9,tele:0.7,human:true,holyOnly:true,drop:{wax:0.4,salt:0.3}},
 };
 
 /** World landmarks (x,z) on 600x600 centered at 0 */

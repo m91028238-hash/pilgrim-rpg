@@ -1,57 +1,55 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="theme-color" content="#1a2a1a">
-<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#14110e">
 <title>The Pilgrim's Way</title>
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=3">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js?v=3"}}</script>
 </head>
 <body>
-<div id="title" class="overlay">
-  <div class="title-card">
-    <div class="title-cross">✝</div>
+<canvas id="c"></canvas>
+<div id="loading"><div class="lt">The Pilgrim's Way</div><div class="lbar"><i id="lfill"></i></div><div id="lpct">0%</div><div id="lnote">Loading the Camino…</div></div>
+<div id="title" class="hidden">
+  <div class="tbox">
     <h1>The Pilgrim's Way</h1>
-    <p class="sub">Region 1 · Camino de Santiago</p>
-    <button id="btn-continue" class="btn primary" disabled>Continue</button>
-    <button id="btn-new" class="btn">New Game</button>
+    <div class="sub">A walk to Santiago</div>
+    <button id="bContinue" class="tb hidden">Continue</button>
+    <button id="bNew" class="tb">New pilgrimage</button>
+    <div class="trow"><span>Quality</span><div id="qsel" class="seg"><b data-q="0">Low</b><b data-q="1">Medium</b><b data-q="2">High</b></div></div>
+    <button id="bCredits" class="tl">Credits</button>
   </div>
 </div>
 <div id="hud" class="hidden">
-  <div id="topbar">
-    <div class="stat"><span class="lbl">HP</span><div class="bar"><i id="hp-fill"></i></div><span id="hp-txt">100</span></div>
-    <div class="stat"><span class="lbl">ST</span><div class="bar st"><i id="st-fill"></i></div></div>
-    <div class="stat"><span class="lbl">FD</span><div class="bar fd"><i id="fd-fill"></i></div></div>
-    <div class="stat"><span class="lbl">FA</span><div class="bar fa"><i id="fa-fill"></i></div></div>
-    <div id="coins">◈ 0</div>
-    <div id="lvl">Lv 1</div>
+  <div id="bars">
+    <div class="lv"><b id="lvl">1</b></div>
+    <div class="bw"><div class="bar hp"><i id="hpF"></i><span id="hpT"></span></div><div class="bar st"><i id="stF"></i></div><div class="bar fa"><i id="faF"></i></div><div class="bar xp"><i id="xpF"></i></div></div>
   </div>
+  <div id="tracker"><div id="trName"></div><div id="trObj"></div><div id="trDist"></div></div>
+  <button id="menuBtn" aria-label="Menu">☰</button>
+  <div id="mmWrap"><canvas id="minimap" width="208" height="208"></canvas><div id="clock"></div></div>
+  <div id="lockFrame" class="hidden"><div id="lfName"></div><div class="bar ehp"><i id="lfHp"></i></div></div>
   <div id="toasts"></div>
-  <div id="quest-panel">
-    <div id="q-title">—</div>
-    <div id="q-desc"></div>
-    <div id="q-arrow">↑</div>
+  <div id="prompt" class="hidden"></div>
+  <div id="beacon" class="hidden"><i></i><span></span></div>
+  <div id="plates"></div>
+  <div id="joyZone"></div><div id="joyBase"><div id="joyKnob"></div></div>
+  <div id="actions">
+    <button id="aAtk" class="ab big" aria-label="Attack">⚔</button>
+    <button id="aHeavy" class="ab" aria-label="Heavy attack">⚒</button>
+    <button id="aRoll" class="ab" aria-label="Dodge">⤳</button>
+    <button id="aBlock" class="ab" aria-label="Block">⛨</button>
+    <button id="aPray" class="ab sm" aria-label="Pray">✝</button>
+    <button id="aLock" class="ab sm" aria-label="Lock on">◎</button>
   </div>
-  <div id="interact-hint" class="hidden"></div>
-  <canvas id="minimap" width="96" height="96"></canvas>
+  <div id="quick"><button class="qs" data-i="0"></button><button class="qs" data-i="1"></button></div>
+  <div id="keys" class="hidden">WASD move · Shift sprint · LMB attack · RMB block · F heavy · Space dodge · R pray · T lock · E use · Tab menu</div>
+  <div id="flash"></div>
 </div>
-<div id="joy-zone"><div id="joy-base"><div id="joy-stick"></div></div></div>
-<div id="btn-zone" class="hidden">
-  <button class="abtn" id="btn-attack" data-a="attack">⚔</button>
-  <button class="abtn" id="btn-block" data-a="block">✝</button>
-  <button class="abtn" id="btn-interact" data-a="interact">✋</button>
-  <button class="abtn" id="btn-sprint" data-a="sprint">⇢</button>
-  <button class="abtn" id="btn-bag" data-a="bag">🎒</button>
-</div>
-<div id="panel" class="overlay hidden">
-  <div class="panel-card">
-    <div class="panel-head"><h2 id="panel-title">Bag</h2><button id="panel-close" class="btn sm">✕</button></div>
-    <div id="panel-tabs"></div>
-    <div id="panel-body"></div>
-  </div>
-</div>
+<div id="dialog" class="hidden"><div id="dName"></div><div id="dText"></div><div id="dChoices"></div></div>
+<div id="panel" class="hidden"><div class="ptabs" id="ptabs"></div><button id="pClose" aria-label="Close">✕</button><div id="pBody"></div></div>
 <div id="fps" class="hidden"></div>
-<script type="module" src="js/main.js?v=2"></script>
+<script type="module" src="js/game.js?v=3"></script>
 </body>
 </html>
