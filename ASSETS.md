@@ -27,4 +27,4 @@ Every file is stored in this repo under `assets/` or `vendor/`. Nothing is loade
 
 Procedural content written for v4 (no third-party files): stained-glass windows, the crucifix corpus pose, the Marian and St James statues, candles and flames, light shafts, chimney smoke, birds, tree impostors and wind sway.
 
-All audio is generated in the browser with WebAudio. There are no audio files.
+All audio is generated in the browser with WebAudio: ambience, combat sounds, and (v5) footsteps that change with surface (grass, dirt road, stone, wooden floors, shallow water) and pace (walk, jog, sprint), plus breathing when you sprint or run low on stamina. There are no audio files, so no audio licences apply.

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { clone as skClone } from '../vendor/addons/utils/SkeletonUtils.js?v=4';
-import { neutralise } from './gear.js?v=4';
+import { clone as skClone } from '../vendor/addons/utils/SkeletonUtils.js?v=5';
+import { neutralise } from './gear.js?v=5';
 
 /** Build a skinned human from the composed Quaternius glb.
  *  opts: { sex:'m'|'f', outfit:'Peasant'|'Ranger', hair:'Hair_Beard'|..., tints:{cloth:hex, skin:hex}, demon:bool } */

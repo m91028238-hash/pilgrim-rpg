@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { ITEMS, SKILLS, RECIPES, SHOPS, MAIN_QUEST } from './data.js?v=4';
-import { PLACES, heightAt, splatAt, PATH, RIVER } from './world.js?v=4';
+import { ITEMS, SKILLS, RECIPES, SHOPS, MAIN_QUEST } from './data.js?v=5';
+import { PLACES, heightAt, splatAt, PATH, RIVER } from './world.js?v=5';
 const $ = id => document.getElementById(id);
 const SLOTS = ['weapon', 'hat', 'cloak', 'body', 'boots', 'trinket'];
 const SLOTN = { weapon: 'Staff / weapon', hat: 'Hat', cloak: 'Cloak', body: 'Body', boots: 'Boots', trinket: 'Trinket' };
@@ -26,25 +26,32 @@ export class UI {
   hud() {
     const G = this.G, S = G.S;
     $('hpF').style.width = (100 * Math.max(0, S.hp) / G.maxHp()) + '%'; $('hpT').textContent = Math.ceil(Math.max(0, S.hp)) + '/' + G.maxHp();
-    $('stF').style.width = (100 * Math.max(0, S.stamina) / G.maxSt()) + '%'; $('faF').style.width = (100 * S.faith / G.maxFaith()) + '%';
+    $('stF').style.width = (100 * Math.max(0, S.stamina) / G.maxSt()) + '%'; { const sb = $('stF').parentNode; sb.classList.toggle('drain', !!G.player.sprinting); sb.classList.toggle('low', S.stamina < G.maxSt() * 0.2); } $('faF').style.width = (100 * S.faith / G.maxFaith()) + '%';
     $('xpF').style.width = (100 * S.xp / G.xpNeed()) + '%'; $('lvl').textContent = S.lvl;
     const h = (S.time * 24 + 24) % 24; $('clock').textContent = `Day ${S.day} · ${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`;
     // tracker
     const tr = G.trackTarget(); $('trName').textContent = tr ? tr.name : ''; $('trObj').textContent = tr ? tr.obj : ''; $('trDist').textContent = tr && tr.pos ? `${Math.round(Math.hypot(tr.pos.x - G.wpos.x, tr.pos.z - G.wpos.z))} m` : '';
+    { const M = G.missions; let nx = ''; if (M && !M.activeIds().length && !tr?.suggestion) { const sg = M.suggest(); if (sg) nx = `Next mission: ${sg.m.name} — ${G.npcById(sg.m.giver)?.name} · ${Math.round(sg.d)} m`; } if (this._nx !== nx) { this._nx = nx; $('trNext').textContent = nx; } }
     const q = $('quick').children; for (let i = 0; i < 2; i++) { const id = S.quick[i]; const n = id ? (S.inv[id] || 0) : 0; q[i].innerHTML = id && n ? `${ITEMS[id].ico}<small>${n}</small>` : '<span style="opacity:.3">+</span>'; }
     const lk = G.player.lock; if (lk && lk.alive) { $('lockFrame').classList.remove('hidden'); $('lfName').textContent = `${lk.def.name} · Lv ${lk.lvl}`; $('lfHp').style.width = (100 * lk.hp / lk.maxHp) + '%'; } else $('lockFrame').classList.add('hidden');
   }
   // per-frame overlays: beacon, nameplates, damage numbers
   overlays(dt) {
     const G = this.G, cam = G.camera, W = innerWidth, H = innerHeight;
-    const tr = G.trackTarget(); const b = $('beacon');
-    if (tr && tr.pos && !G.uiOpen() && !G.inside) {
-      v3.set(tr.pos.x, (tr.pos.y ?? heightAt(tr.pos.x, tr.pos.z)) + 2.2, tr.pos.z).project(cam); let x = (v3.x * 0.5 + 0.5) * W, y = (-v3.y * 0.5 + 0.5) * H;
-      const behind = v3.z > 1; if (behind) { x = W - x; y = H - 40; }
-      x = Math.max(24, Math.min(W - 24, x)); y = Math.max(140, Math.min(H - 250, y));
+    // objective: diamond + distance when on screen, an edge arrow pointing at it when it is off screen or behind the camera
+    const tr = G.trackTarget(); const b = $('beacon'), ea = $('edgeArrow'); let showB = false, showA = false;
+    if (tr && tr.pos && !G.uiOpen() && (!G.inside || tr.inner)) {
       const d = Math.hypot(tr.pos.x - G.player.pos.x, tr.pos.z - G.player.pos.z);
-      if (d > 5) { b.classList.remove('hidden'); b.style.left = x + 'px'; b.style.top = y + 'px'; b.lastChild.textContent = Math.round(d) + 'm'; } else b.classList.add('hidden');
-    } else b.classList.add('hidden');
+      v3.set(tr.pos.x, (tr.pos.y ?? (G.inside ? 0 : heightAt(tr.pos.x, tr.pos.z))) + (G.inside ? 1.6 : 2.2), tr.pos.z).project(cam);
+      const front = v3.z < 1; let x = (v3.x * 0.5 + 0.5) * W, y = (-v3.y * 0.5 + 0.5) * H; const top = 118, mg = 30;
+      if (d > 3.5) {
+        if (front && x > mg && x < W - mg && y > top && y < H - mg) { showB = true; b.style.left = x + 'px'; b.style.top = y + 'px'; b.lastChild.textContent = Math.round(d) + 'm'; }
+        else { let dx = x - W / 2, dy = y - H / 2; if (!front) { dx = -dx; dy = -dy; if (Math.abs(dy) < 1 && Math.abs(dx) < 1) dy = 1; } const a = Math.atan2(dy, dx), c = Math.cos(a), s = Math.sin(a);
+          const hw = W / 2 - 34, hhT = H / 2 - top + 6, hhB = H / 2 - 92; const k = Math.min(hw / Math.max(1e-3, Math.abs(c)), (s < 0 ? hhT : hhB) / Math.max(1e-3, Math.abs(s)));
+          showA = true; ea.style.left = (W / 2 + c * k) + 'px'; ea.style.top = (H / 2 + s * k) + 'px'; ea.firstChild.style.transform = `rotate(${a}rad)`; ea.lastChild.textContent = Math.round(d) + ' m'; }
+      }
+    }
+    b.classList.toggle('hidden', !showB); ea.classList.toggle('hidden', !showA);
     // plates
     const used = new Set(); const box = $('plates');
     const want = [];
@@ -78,7 +85,9 @@ export class UI {
     for (const e of G.enemies) if (e.alive) dot(e.pos.x, e.pos.z, e.aggro ? '#ff5a4a' : '#c0504a', 3.5);
     for (const n of G.npcs) if (n.obj.visible) dot(n.pos.x, n.pos.z, '#f2e2b0', 3);
     for (const it of G.world.interactives) if (it.type === 'shrine') dot(it.x, it.z, '#ffd76a', 4.5);
-    const tr = G.trackTarget(); if (tr && tr.pos) { const dx = (tr.pos.x - P.x) * sc, dz = (tr.pos.z - P.z) * sc, d = Math.hypot(dx, dz), m = Math.min(1, (S / 2 - 8) / d); g.fillStyle = '#ffe08a'; g.save(); g.translate(dx * m, dz * m); g.rotate(Math.PI / 4); g.fillRect(-5, -5, 10, 10); g.restore(); }
+    // mission givers: gold ! (new) and green ? (ready to report), drawn upright
+    for (const mk of G.missions?.mapMarks() || []) { const dx = (mk.x - P.x) * sc, dz = (mk.z - P.z) * sc; if (Math.hypot(dx, dz) > S / 2 - 7) continue; g.save(); g.translate(dx, dz); g.rotate(-G.cam.yaw); g.fillStyle = 'rgba(20,14,8,.85)'; g.beginPath(); g.arc(0, 0, 6.5, 0, 7); g.fill(); g.strokeStyle = g.fillStyle = mk.k === '?' ? '#8fe08a' : '#f3c95a'; g.lineWidth = 1.5; g.stroke(); g.font = 'bold 10px Georgia,serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(mk.k, 0, 0.5); g.restore(); }
+    const tr = G.trackTarget(); if (tr && tr.pos && !tr.inner) { const dx = (tr.pos.x - P.x) * sc, dz = (tr.pos.z - P.z) * sc, d = Math.hypot(dx, dz), m = Math.min(1, (S / 2 - 9) / Math.max(d, 1e-3)); const pu = 1 + 0.18 * Math.sin(performance.now() / 180); g.save(); g.translate(dx * m, dz * m); g.rotate(Math.PI / 4); g.fillStyle = '#ffe08a'; g.strokeStyle = '#3a2a10'; g.lineWidth = 2; g.fillRect(-6 * pu, -6 * pu, 12 * pu, 12 * pu); g.strokeRect(-6 * pu, -6 * pu, 12 * pu, 12 * pu); g.restore(); }
     g.restore();
     // player arrow (always up = facing relative to camera)
     g.save(); g.translate(S / 2, S / 2); g.rotate(-(G.player.yaw - G.cam.yaw) + Math.PI); g.fillStyle = '#fff'; g.beginPath(); g.moveTo(0, -9); g.lineTo(6, 7); g.lineTo(0, 3); g.lineTo(-6, 7); g.closePath(); g.fill(); g.restore();
@@ -94,14 +103,14 @@ export class UI {
   }
   hideTitle() { $('title').classList.add('hidden'); $('hud').classList.remove('hidden'); }
   credits() {
-    this.dialog('Credits', 'Characters, animations, Medieval Village MegaKit (incl. doors and windows), Fantasy Props MegaKit furniture and nature kit by Quaternius (CC0). Wolf, cow and the animated pig used as our wild boar by Quaternius (CC0, via poly.pizza). Foliage cards baked from Poly Haven plant scans (CC0: grass_medium_02, dandelion_01, celandine_01, periwinkle_plant, fern_02, nettle_plant, weed_plant_02, shrub_02/03/04). Terrain, sandstone, monastery floor, old wood floor and dry-stone wall textures and sky HDRI from Poly Haven (CC0). Built with three.js (MIT). Full list in ASSETS.md.', [{ t: 'Close' }]);
+    this.dialog('Credits', 'Characters, animations, Medieval Village MegaKit (incl. doors and windows), Fantasy Props MegaKit furniture and nature kit by Quaternius (CC0). Wolf, cow and the animated pig used as our wild boar by Quaternius (CC0, via poly.pizza). Foliage cards baked from Poly Haven plant scans (CC0: grass_medium_02, dandelion_01, celandine_01, periwinkle_plant, fern_02, nettle_plant, weed_plant_02, shrub_02/03/04). Terrain, sandstone, monastery floor, old wood floor and dry-stone wall textures and sky HDRI from Poly Haven (CC0). All sound — ambience, footsteps, breathing, combat — is synthesised live in the browser (no audio files). Built with three.js (MIT). Full list in ASSETS.md.', [{ t: 'Close' }]);
   }
   // ---- dialogue ----
   dialog(name, text, choices, npc) {
-    const G = this.G; $('dialog').classList.remove('hidden'); $('dName').textContent = name; $('dText').textContent = text; const box = $('dChoices'); box.innerHTML = '';
+    const G = this.G; if ($('dialog').classList.contains('hidden')) this.dlgT = performance.now(); $('dialog').classList.remove('hidden'); $('dName').textContent = name; $('dText').textContent = text; const box = $('dChoices'); box.innerHTML = '';
     if (npc) npc.talking = true; this.dlgNpc = npc;
     const gen = this.dlgGen = (this.dlgGen || 0) + 1;
-    for (const c of choices) { const b = document.createElement('button'); b.textContent = c.t; b.onclick = () => { G.audio.click(); const next = c.f && c.f(); if (next && next.t) this.dialog(name, next.t, next.c, npc); else if (this.dlgGen === gen) this.closeDialog(); }; box.appendChild(b); }
+    for (const c of choices) { const b = document.createElement('button'); b.textContent = c.t; b.onclick = () => { if (performance.now() - this.dlgT < 350) return; /* swallow the ghost click from the tap that opened the dialog */ G.audio.click(); const next = c.f && c.f(); if (next && next.t) this.dialog(name, next.t, next.c, npc); else if (this.dlgGen === gen) this.closeDialog(); }; box.appendChild(b); }
   }
   closeDialog() { $('dialog').classList.add('hidden'); if (this.dlgNpc) this.dlgNpc.talking = false; this.dlgNpc = null; }
   dialogOpen() { return !$('dialog').classList.contains('hidden'); }
@@ -136,12 +145,22 @@ export class UI {
       h.push(`<h3>Skills</h3><div class="muted">Skill points: <b>${S.sp}</b> — one per level.</div>`);
       for (const s of SKILLS) { const rk = S.skills[s.id] || 0; h.push(`<div class="row"><div class="grow"><div>${s.name} <span class="muted">${rk}/${s.max}</span></div><div class="muted">${s.desc}</div></div><button class="btn" data-skill="${s.id}" ${rk < s.max && S.sp >= s.cost ? '' : 'disabled'}>+${s.cost}</button></div>`); }
     } else if (tab === 'quests') {
-      const mq = G.mq(); h.push('<h3>The Way</h3>'); if (mq) h.push(`<div class="row"><div class="grow"><div class="t-blessed">${mq.name}</div><div>${mq.desc}</div>${mq.why ? `<div class="muted">${mq.why}</div>` : ''}<div class="muted">${G.mqProgText()}</div></div></div>`); else h.push('<div class="muted">Pilgrimage complete. Bounties and townsfolk always need help.</div>');
-      h.push('<h3>Tasks</h3>'); if (!S.side.length) h.push('<div class="muted">No tasks. Check a notice board or talk to townsfolk.</div>');
-      for (const q of S.side) h.push(`<div class="row"><div class="grow"><div>${q.name} ${q.done ? '<span class="t-uncommon">✓ ready</span>' : ''}</div><div class="muted">${q.desc} — ${q.prog}/${q.n}${q.giver ? ' · return to ' + G.giverName(q.giver) : ''}</div></div><button class="btn" data-track="${q.uid}">${S.track === q.uid ? 'Tracked' : 'Track'}</button><button class="btn" data-abandon="${q.uid}">✕</button></div>`);
-      h.push(`<div style="margin-top:8px"><button class="btn" data-track="main">Track main road</button></div>`);
+      const M = G.missions, W = G.wpos, tr = G.trackTarget(); const dist = p => p && p.x < 900 ? Math.round(Math.hypot(p.x - W.x, p.z - W.z)) + ' m' : (p ? 'here' : '');
+      const tb = (k, on) => `<button class="btn" data-track="${k}">${on ? '◆ Tracked' : 'Track'}</button>`;
+      h.push('<h3>Now</h3>'); if (tr) h.push(`<div class="row"><div class="grow"><div class="t-blessed">${tr.name}</div><div>${tr.obj}</div><div class="muted">${tr.place ? tr.place + ' · ' : ''}${dist(tr.pos)}</div></div></div>`);
+      const mq = G.mq(); h.push('<h3>The Way (main road)</h3>'); if (mq) h.push(`<div class="row"><div class="grow"><div class="t-blessed">${mq.name}</div><div>${mq.desc}</div>${mq.why ? `<div class="muted">${mq.why}</div>` : ''}<div class="muted">${G.mqProgText()}</div></div>${tb('main', S.track === 'main')}</div>`); else h.push('<div class="muted">Pilgrimage complete. Missions and bounties always need a willing pair of hands.</div>');
+      const act = M.activeIds(); h.push(`<h3>Missions in progress (${act.length})</h3>`); if (!act.length) h.push('<div class="muted">None — pick one below. Look for <b style="color:#f3c95a">!</b> over villagers.</div>');
+      for (const id of act) { const m = M.byId[id], a = M.st.act[id], tg = M.target(id);
+        const steps = m.steps.map((s, i) => `<div class="${i < a.s ? 'muted' : ''}">${i < a.s ? '✓' : i === a.s ? '▶' : '○'} ${s.d}${i === a.s && s.place ? ` <span class="muted">— ${s.place}</span>` : ''}</div>`).join('');
+        h.push(`<div class="row"><div class="grow"><div>${m.name} <span class="muted">· ${G.npcById(m.giver)?.name || ''}</span></div>${steps}<div class="muted">${tg?.pos ? dist(tg.pos) : ''}</div></div>${tb('m:' + id, S.track === 'm:' + id)}<button class="btn" data-mabandon="${id}">✕</button></div>`); }
+      const av = M.available().map(m => ({ m, p: M.giverPos(m) })).sort((a, b) => Math.hypot(a.p.x - W.x, a.p.z - W.z) - Math.hypot(b.p.x - W.x, b.p.z - W.z));
+      h.push(`<h3>Available missions (${av.length})</h3>`); if (!av.length) h.push('<div class="muted">No new missions right now — follow the main road; more open up as you go.</div>');
+      for (const { m, p } of av.slice(0, 8)) { const r = m.reward || {}; h.push(`<div class="row"><div class="grow"><div><b style="color:#f3c95a">!</b> ${m.name} ${S.lvl < m.minLvl ? `<span class="muted">(Lv ${m.minLvl})</span>` : ''}</div><div class="muted">Talk to ${G.npcById(m.giver)?.name} · ${m.area} · ${dist(p)} · +${r.xp} XP, ${r.coin}c</div></div>${tb('g:' + m.id, S.track === 'g:' + m.id)}</div>`); }
+      h.push(`<div class="muted" style="margin-top:4px">Missions completed: ${Object.keys(M.st.done).length} / ${M.byId ? Object.keys(M.byId).length : 0}</div>`);
+      h.push('<h3>Bounties</h3>'); if (!S.side.length) h.push('<div class="muted">No bounties. Check a notice board or ask townsfolk.</div>');
+      for (const q of S.side) h.push(`<div class="row"><div class="grow"><div>${q.name} ${q.done ? '<span class="t-uncommon">✓ ready</span>' : ''}</div><div class="muted">${q.desc} — ${q.prog}/${q.n}${q.giver ? ' · return to ' + G.giverName(q.giver) : ''}</div></div>${tb(q.uid, S.track === q.uid)}<button class="btn" data-abandon="${q.uid}">✕</button></div>`);
     } else if (tab === 'map') {
-      h.push('<canvas id="mapC" width="512" height="512"></canvas><div class="muted" style="text-align:center;margin-top:6px">Gold: shrines · White: places · Yellow line: the Camino</div>');
+      h.push('<canvas id="mapC" width="512" height="512"></canvas><div class="muted" style="text-align:center;margin-top:6px">Gold dots: shrines · ◆ objective · <b style=\"color:#f3c95a\">!</b> new mission · <b style=\"color:#8fe08a\">?</b> report back · Yellow line: the Camino</div>');
     } else if (tab === 'settings') {
       h.push(`<h3>Settings</h3><div class="row"><div class="grow">Graphics quality</div><div class="seg" id="sq">${['Low', 'Medium', 'High'].map((n, i) => `<b data-q="${i}" class="${G.qLevel === i ? 'on' : ''}">${n}</b>`).join('')}</div></div>
       <div class="row"><div class="grow">Camera sensitivity</div><input type="range" id="sens" min="0.4" max="2" step="0.1" value="${G.sens}"></div>
@@ -162,7 +181,7 @@ export class UI {
     const sens = $('sens'); if (sens) sens.oninput = () => { G.sens = +sens.value; localStorage.setItem('pr_sens', G.sens); };
   }
   panelClick(e) {
-    const G = this.G, S = G.S, t = e.target.closest('[data-id],[data-eq],[data-act],[data-craft],[data-skill],[data-buy],[data-sell],[data-track],[data-abandon],button'); if (!t) return; const d = t.dataset;
+    const G = this.G, S = G.S, t = e.target.closest('[data-id],[data-eq],[data-act],[data-craft],[data-skill],[data-buy],[data-sell],[data-track],[data-abandon],[data-mabandon],button'); if (!t) return; const d = t.dataset;
     if (d.id) { this.sel = d.id; }
     else if (d.eq) { if (S.equip[d.eq] && d.eq !== 'weapon') G.unequip(d.eq); }
     else if (d.act === 'equip') G.equip(this.sel); else if (d.act === 'use') { G.useItem(this.sel); if (!S.inv[this.sel]) this.sel = null; }
@@ -170,7 +189,7 @@ export class UI {
     else if (d.act === 'drop') { G.take(this.sel, 1); if (!S.inv[this.sel]) this.sel = null; }
     else if (d.craft) G.craft(d.craft); else if (d.skill) G.learn(d.skill);
     else if (d.buy) G.buy(d.buy, +d.p); else if (d.sell) G.sell(d.sell);
-    else if (d.track) { S.track = d.track; } else if (d.abandon) { S.side = S.side.filter(q => q.uid !== d.abandon); if (S.track === d.abandon) S.track = 'main'; }
+    else if (d.track) { S.track = d.track; } else if (d.mabandon) { G.missions.abandon(d.mabandon); G.ui.toast('Mission abandoned'); } else if (d.abandon) { S.side = S.side.filter(q => q.uid !== d.abandon); if (S.track === d.abandon) S.track = 'main'; }
     else if (t.id === 'invY') { G.invY = !G.invY; localStorage.setItem('pr_invy', G.invY ? '1' : '0'); }
     else if (t.id === 'mute') G.audio.setMuted(!G.audio.muted); else if (t.id === 'fpsB') { G.showFps = !G.showFps; $('fps').classList.toggle('hidden', !G.showFps); }
     else if (t.id === 'quit') { G.save(); location.reload(); return; } else if (t.id === 'cred') { this.closePanel(); this.credits(); return; }
@@ -184,7 +203,8 @@ export class UI {
     g.font = '12px Georgia'; g.textAlign = 'center';
     for (const [key, p] of Object.entries(PLACES)) { if (/^(notice|bench|campfire|chapel_chest|market|priest|bridge|poor_1)$/.test(key)) continue; const [a, b] = P(p.x, p.z); const sh = /shrine/.test(key); g.fillStyle = sh ? '#ffd76a' : '#fff'; g.beginPath(); g.arc(a, b, sh ? 4 : 3, 0, 7); g.fill(); if (!sh) { g.fillStyle = '#000a'; g.fillText(p.label, a + 1, b - 7); g.fillStyle = '#fff'; g.fillText(p.label, a, b - 8); } }
     const [px, pz] = P(G.wpos.x, G.wpos.z); g.save(); g.translate(px, pz); g.rotate(-G.player.yaw + Math.PI); g.fillStyle = '#ff6a4a'; g.beginPath(); g.moveTo(0, -8); g.lineTo(6, 6); g.lineTo(-6, 6); g.fill(); g.restore();
-    const tr = G.trackTarget(); if (tr && tr.pos) { const [a, b] = P(tr.pos.x, tr.pos.z); g.strokeStyle = '#ffe08a'; g.lineWidth = 2; g.strokeRect(a - 5, b - 5, 10, 10); }
+    for (const mk of G.missions?.mapMarks() || []) { const [a, b] = P(mk.x, mk.z); g.fillStyle = 'rgba(20,14,8,.85)'; g.beginPath(); g.arc(a, b, 7, 0, 7); g.fill(); g.fillStyle = g.strokeStyle = mk.k === '?' ? '#8fe08a' : '#f3c95a'; g.lineWidth = 1.5; g.stroke(); g.font = 'bold 11px Georgia'; g.textBaseline = 'middle'; g.fillText(mk.k, a, b + 0.5); g.textBaseline = 'alphabetic'; }
+    const tr = G.trackTarget(); if (tr && tr.pos && !tr.inner) { const [a, b] = P(tr.pos.x, tr.pos.z); g.save(); g.translate(a, b); g.rotate(Math.PI / 4); g.fillStyle = '#ffe08a'; g.strokeStyle = '#3a2a10'; g.lineWidth = 2; g.fillRect(-6, -6, 12, 12); g.strokeRect(-6, -6, 12, 12); g.restore(); }
   }
 }
 function statLine(it) { const s = []; if (it.atk) s.push(`ATK ${it.atk}`); if (it.def) s.push(`DEF ${it.def}`); if (it.faithBonus) s.push(`Faith +${it.faithBonus}`); if (it.hpBonus) s.push(`HP +${it.hpBonus}`); if (it.speed) s.push(`Speed +${Math.round(it.speed * 100)}%`); if (it.demonBonus) s.push(`vs shadows +${it.demonBonus}%`); if (it.slots) s.push(`+${it.slots} slots`); if (it.hp) s.push(`+${it.hp} HP`); if (it.hunger) s.push(`+${it.hunger} food`); if (it.faith) s.push(`+${it.faith} faith`); return s.join(' · '); }

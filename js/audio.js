@@ -1,6 +1,6 @@
 // Procedural WebAudio: ambience (wind, birds, crickets, river), footsteps and combat sfx. No audio files.
 export class Audio {
-  constructor() { this.ctx = null; this.muted = localStorage.getItem('pr_mute') === '1'; this.vol = 0.8; }
+  constructor() { this.ctx = null; this.muted = localStorage.getItem('pr_mute') === '1'; this.vol = 0.8; this.bindUnlock(); }
   init() {
     if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
@@ -24,7 +24,33 @@ export class Audio {
     if (day < 0.5 && t > this.nextCricket) { this.nextCricket = t + 0.4 + Math.random() * 0.8; for (let i = 0; i < 3; i++) setTimeout(() => this.tone(4200 + Math.random() * 300, 0.03, 'sine', 0.012), i * 60); }
   }
   bird() { const base = 2200 + Math.random() * 1800; const n = 2 + Math.floor(Math.random() * 4); for (let i = 0; i < n; i++) setTimeout(() => this.tone(base * (0.9 + Math.random() * 0.25), 0.07 + Math.random() * 0.05, 'sine', 0.025, 0.01, base * (1.1 + Math.random() * 0.3)), i * (90 + Math.random() * 60)); }
-  step(surface = 'grass', loud = 0.6) { const m = { grass: [700, 0.05, 0.6], path: [1400, 0.07, 1.2], stone: [2200, 0.06, 1.8], wood: [500, 0.09, 3], water: [900, 0.08, 0.5] }[surface] || [900, 0.06, 1]; this.noise(m[1], 'bandpass', m[0] * (0.85 + Math.random() * 0.3), 0.14 * loud, m[2]); if (surface === 'wood') this.tone(140, 0.06, 'sine', 0.05 * loud); if (surface === 'water') this.noise(0.15, 'lowpass', 600, 0.08); }
+  // footsteps: two procedural layers (heel thump + surface texture), varied per surface and pace; tiny random pitch/level so no two steps match
+  step(surface = 'grass', loud = 0.6, pace = 'jog') {
+    const c = this.ctx; if (!c || this.muted || c.state !== 'running') return; const t = c.currentTime, r = () => 0.88 + Math.random() * 0.24; const L = loud * (0.85 + Math.random() * 0.3);
+    const burst = (dt, dur, type, f, q, peak, buf = this.white) => { const s = c.createBufferSource(); s.buffer = buf; const fl = c.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; const g = c.createGain(); g.gain.setValueAtTime(0.0001, t + dt); g.gain.exponentialRampToValueAtTime(peak, t + dt + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + dt + dur); s.connect(fl); fl.connect(g); g.connect(this.master); s.start(t + dt, Math.random() * 1.5); s.stop(t + dt + dur + 0.05); };
+    const thump = (f, dur, peak) => { const o = c.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(f * r(), t); o.frequency.exponentialRampToValueAtTime(f * 0.55, t + dur); const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(g); g.connect(this.master); o.start(t); o.stop(t + dur + 0.05); };
+    const run = pace === 'sprint' ? 1 : 0;
+    if (surface === 'grass') { thump(85, 0.07, 0.07 * L); burst(0.005, 0.09 + run * 0.03, 'bandpass', 2600 * r(), 0.7, 0.05 * L); burst(0.03, 0.07, 'highpass', 4200 * r(), 0.5, 0.025 * L); }
+    else if (surface === 'path') { thump(95, 0.06, 0.08 * L); for (let i = 0; i < 4 + run * 2; i++) burst(0.004 + i * (0.011 + Math.random() * 0.012), 0.03, 'bandpass', (1700 + Math.random() * 1800), 2.2, (0.06 - i * 0.008) * L); }
+    else if (surface === 'stone') { thump(140, 0.05, 0.09 * L); burst(0, 0.035, 'bandpass', 3200 * r(), 3, 0.08 * L); burst(0.02, 0.05, 'highpass', 5200, 0.8, 0.03 * L); }
+    else if (surface === 'wood') { thump(110, 0.11, 0.13 * L); const o = c.createOscillator(); o.type = 'triangle'; o.frequency.value = 230 * r(); const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.045 * L, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09); o.connect(g); g.connect(this.master); o.start(t); o.stop(t + 0.12); burst(0.003, 0.04, 'bandpass', 1500 * r(), 1.5, 0.04 * L); }
+    else if (surface === 'water') { burst(0, 0.18, 'lowpass', 700 * r(), 0.8, 0.09 * L, this.brown); burst(0.02, 0.14, 'bandpass', 1600 * r(), 1.2, 0.05 * L); }
+    else { thump(90, 0.06, 0.08 * L); burst(0, 0.06, 'bandpass', 1000, 1, 0.06 * L); }
+  }
+  // breathing: soft in/out breaths when sprinting or low on stamina; effort 0..1 sets loudness and rate (called by the game each frame)
+  breathe(dt, effort) {
+    const c = this.ctx; if (!c || this.muted || c.state !== 'running') return; this._br = (this._br ?? 0) - dt; if (effort < 0.05 || this._br > 0) return;
+    const period = 1.25 - effort * 0.6; this._br = period; this._brIn = !this._brIn; const t = c.currentTime;
+    const s = c.createBufferSource(); s.buffer = this.white; const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = this._brIn ? 1100 : 750; f.Q.value = 0.9; const g = c.createGain(); const pk = (0.012 + effort * 0.03) * (this._brIn ? 0.8 : 1);
+    const d = period * (this._brIn ? 0.38 : 0.48); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(pk, t + d * 0.35); g.gain.exponentialRampToValueAtTime(0.0001, t + d); s.connect(f); f.connect(g); g.connect(this.master); s.start(t, Math.random()); s.stop(t + d + 0.05);
+  }
+  // iOS / Android: an AudioContext only starts inside a user gesture. Resume + play one silent sample on the first touch/click/key.
+  bindUnlock() {
+    const go = () => { this.init(); const c = this.ctx; if (!c) return; if (c.state !== 'running') c.resume?.(); try { const b = c.createBuffer(1, 1, 22050), s = c.createBufferSource(); s.buffer = b; s.connect(c.destination); s.start(0); } catch (_) { }
+      if (c.state === 'running') for (const e of evs) removeEventListener(e, go, true); };
+    const evs = ['touchstart', 'touchend', 'pointerdown', 'pointerup', 'mousedown', 'click', 'keydown']; for (const e of evs) addEventListener(e, go, { capture: true, passive: true });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && this.ctx && this.ctx.state !== 'running') this.ctx.resume?.(); });
+  }
   swing(p = 1) { this.noise(0.18, 'bandpass', 900 * p + 400, 0.12, 1.4); }
   whoosh() { this.noise(0.3, 'lowpass', 700, 0.16); }
   hit(heavy) { this.tone(heavy ? 90 : 130, 0.14, 'sine', 0.35, 0.002, 50); this.noise(0.08, 'lowpass', 1800, 0.25); }

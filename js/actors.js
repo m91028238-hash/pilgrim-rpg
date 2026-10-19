@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { clone as skClone } from '../vendor/addons/utils/SkeletonUtils.js?v=4';
-import { makeHuman, Animator } from './human.js?v=4';
-import { dressPilgrim, makeWeapon, attachWeapon, setGrip } from './gear.js?v=4';
-import { heightAt, WATER } from './world.js?v=4';
-import { ENEMY_TYPES, ITEMS } from './data.js?v=4';
-import { angDiff, clamp, lerp } from './util.js?v=4';
+import { clone as skClone } from '../vendor/addons/utils/SkeletonUtils.js?v=5';
+import { makeHuman, Animator } from './human.js?v=5';
+import { dressPilgrim, makeWeapon, attachWeapon, setGrip } from './gear.js?v=5';
+import { heightAt, WATER } from './world.js?v=5';
+import { ENEMY_TYPES, ITEMS } from './data.js?v=5';
+import { angDiff, clamp, lerp } from './util.js?v=5';
 
 const HUMAN_MAP = { idle: 'Idle_Loop', walk: 'Walk_Loop', jog: 'Jog_Fwd_Loop', sprint: 'Sprint_Loop', a1: 'Sword_Regular_A', a2: 'Sword_Regular_B', a3: 'Sword_Regular_C', heavy: 'Sword_Attack', block: 'Sword_Block', roll: 'Roll', hit: 'Hit_Chest', kb: 'Hit_Knockback', death: 'Death01', pray: 'Spell_Simple_Shoot', gather: 'Farm_Harvest', pick: 'PickUp_Table', chest: 'Chest_Open', eat: 'Consume', talk: 'Idle_Talking_Loop', ready: 'Sword_Idle', prayidle: 'Spell_Simple_Idle_Loop', sit: 'Sitting_Idle_Loop', fold: 'Idle_FoldArms_Loop', zwalk: 'Zombie_Walk_Fwd_Loop', zidle: 'Zombie_Idle_Loop', zatk: 'Zombie_Scratch', punch: 'Punch_Jab', chop: 'TreeChopping_Loop', yes: 'Yes', lantern: 'Idle_Lantern_Loop', formal: 'Walk_Formal_Loop' };
 export function groundY(G, x, z) { if (x > 900) return Math.max(0, G.col.surfaceAt(x, z)); return Math.max(heightAt(x, z), G.col.surfaceAt(x, z), WATER - 0.75); }
@@ -80,7 +80,7 @@ export class Player {
     // action progression
     let speedCap = 0; let moveX = 0, moveZ = 0;
     const walkMax = 2.0 * G.speedMul(), jogMax = 4.1 * G.speedMul(), sprintMax = jogMax * 1.6; // sprint is 60% faster than the jog
-    const wading = heightAt(this.pos.x, this.pos.z) < WATER - 0.3 && G.col.surfaceAt(this.pos.x, this.pos.z) < -100;
+    const wading = heightAt(this.pos.x, this.pos.z) < WATER - 0.3 && G.col.surfaceAt(this.pos.x, this.pos.z) < -100 && G.nearRiver(this.pos.x, this.pos.z); // only the river is water; dry hollows below WATER are not
     if (this.act) {
       const a = this.act; a.t += dt; const p = a.t / a.dur;
       if (a.lunge && p < 0.4) { moveX = Math.sin(this.yaw) * a.lunge; moveZ = Math.cos(this.yaw) * a.lunge; speedCap = -1; }
@@ -121,8 +121,13 @@ export class Player {
       else this.anim.play('sprint', { speed: clamp(sp / 6.4, 0.85, 1.25), fade: 0.2 });
     }
     // footsteps
-    if (sp > 0.6 && !this.act) { this.stepAcc += sp * dt; const stride = sp > 5.2 ? 1.7 : sp > 2.7 ? 1.25 : 0.72; if (this.stepAcc > stride) { this.stepAcc = 0; G.audio.step(G.surfaceType(nx, nz), sp > 5 ? 1 : 0.6); } }
     this.speed = sp; this.anim.update(dt);
+    // footsteps locked to the locomotion clip: two foot contacts per cycle, so cadence follows walk / jog / sprint and their timeScale
+    const ck = this.anim.curKey, ca = this.anim.cur;
+    if (ca && (ck === 'walk' || ck === 'jog' || ck === 'sprint') && sp > 0.5 && !this.act) {
+      const half = Math.floor(((ca.time / ca.getClip().duration) % 1) * 2); const prev = this._stepPh; this._stepPh = half;
+      if (prev != null && half !== prev) { this.stepN = (this.stepN || 0) + 1; G.audio.step(G.surfaceType(nx, nz), ck === 'sprint' ? 1 : ck === 'jog' ? 0.72 : 0.45, ck); }
+    } else this._stepPh = null;
     // two-handed staff grip in combat, walking-staff grip otherwise
     const w = this.obj.userData._wpn; if (w) { const k = this.act ? this.act.k : ''; const fight = /^a\d$|heavy|block/.test(k) || this.blocking || (G.inCombat && sp < 0.25 && !this.act); setGrip(w, fight ? 1 : 0, dt); }
   }

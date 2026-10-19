@@ -1,19 +1,20 @@
 import * as THREE from 'three';
-import './post.js?v=4';
-import { makeComposer } from './post.js?v=4';
-import { Sky } from '../vendor/addons/objects/Sky.js?v=4';
-import { loadAll } from './assets.js?v=4';
-import { buildWorld, PLACES, heightAt, splatAt, WATER, PATH, RIVER } from './world.js?v=4';
-import { Colliders } from './physics.js?v=4';
-import { Player, Enemy, NPC, Critter, groundY } from './actors.js?v=4';
-import { Interiors, IX } from './interiors.js?v=4';
-import { chimneySmoke, Birds, tickFx } from './fx.js?v=4';
-import { makeHat, makeWeapon, attachWeapon } from './gear.js?v=4';
-import { NPC_DEFS } from './npcs.js?v=4';
-import { UI } from './ui.js?v=4';
-import { Audio } from './audio.js?v=4';
-import { ITEMS, SKILLS, RECIPES, MAIN_QUEST, SIDE_TEMPLATES, ENEMY_TYPES } from './data.js?v=4';
-import { distToPolyline, clamp, angDiff, mulberry, hash2, sstep, lerp } from './util.js?v=4';
+import './post.js?v=5';
+import { makeComposer } from './post.js?v=5';
+import { Sky } from '../vendor/addons/objects/Sky.js?v=5';
+import { loadAll } from './assets.js?v=5';
+import { buildWorld, PLACES, heightAt, splatAt, WATER, PATH, RIVER } from './world.js?v=5';
+import { Colliders } from './physics.js?v=5';
+import { Player, Enemy, NPC, Critter, groundY } from './actors.js?v=5';
+import { Interiors, IX } from './interiors.js?v=5';
+import { chimneySmoke, Birds, tickFx } from './fx.js?v=5';
+import { makeHat, makeWeapon, attachWeapon } from './gear.js?v=5';
+import { NPC_DEFS } from './npcs.js?v=5';
+import { Missions, MISSION_NPCS } from './missions.js?v=5';
+import { UI } from './ui.js?v=5';
+import { Audio } from './audio.js?v=5';
+import { ITEMS, SKILLS, RECIPES, MAIN_QUEST, SIDE_TEMPLATES, ENEMY_TYPES } from './data.js?v=5';
+import { distToPolyline, clamp, angDiff, mulberry, hash2, sstep, lerp } from './util.js?v=5';
 
 const SAVE = 'pr_save_v3';
 const QUAL = [
@@ -53,7 +54,7 @@ class Game {
     this.enemies = []; this.npcs = []; this.loot = []; this.tokens = new Set(); this.spawnState = SPAWNS.map(() => ({ alive: [], timer: 0 }));
     this.inp = { mx: 0, my: 0, sprint: false, block: false }; this.keys = {};
     this.cam = { yaw: 0, pitch: 0.28, dist: 4.2, shakeT: 0, shake(a) { this.shakeT = Math.max(this.shakeT, a); }, lastInput: 0 };
-    const fit = () => { r.setSize(innerWidth, innerHeight); this.composer?.setSize(innerWidth, innerHeight); this.camera.aspect = innerWidth / innerHeight; this.camera.fov = this.camera.aspect < 1 ? 72 : 58; this.camera.updateProjectionMatrix(); }; addEventListener('resize', fit); fit();
+    const fit = () => { r.setSize(innerWidth, innerHeight); this.composer?.setSize(innerWidth, innerHeight); this.camera.aspect = innerWidth / innerHeight; this.baseFov = this.camera.aspect < 1 ? 72 : 58; this.camera.fov = this.baseFov + (this._fovK || 0); this.camera.updateProjectionMatrix(); }; addEventListener('resize', fit); fit();
     window.G = this; window.THREE = THREE;
   }
   async boot() {
@@ -88,8 +89,9 @@ class Game {
     if (!isTouch) document.getElementById('keys').classList.remove('hidden');
     setTimeout(() => document.getElementById('keys').classList.add('hidden'), 12000);
     const mq = this.mq(); if (mq) setTimeout(() => this.ui.toast(mq.name + ': ' + mq.desc, 'gold'), 600);
-    if (!this.S.flags.hintMove) { this.S.flags.hintMove = 1; setTimeout(() => this.ui.toast(isTouch ? 'Jogging by default · tap Walk to stroll, Sprint (or push the stick past the ring) to run' : 'Jogging by default · hold Shift to sprint, Z toggles walking', '', 4200), 3600); }
+    if (!this.S.flags.hintMove) { this.S.flags.hintMove = 1; setTimeout(() => this.ui.toast(isTouch ? 'Jogging by default · tap Walk to stroll, tap Sprint to run (tap again to stop)' : 'Jogging by default · hold Shift to sprint, Z toggles walking', '', 4200), 3600); }
     setTimeout(() => this.interiors.prefetch().catch(() => { }), 6000);
+    if (this.missions) { if (fresh) for (const id of Object.keys(this.missions.spawned).concat(Object.keys(this.missions.pickups), Object.keys(this.missions.followers))) this.missions.cleanup(id); this.missions.restore(); }
     this.checkHave(); this.save();
   }
   // ---------------- derived stats ----------------
@@ -147,7 +149,7 @@ class Game {
     if (n) setTimeout(() => this.ui.toast(`${n.name}: ${n.desc}`), 1400); this.checkHave(); this.save();
   }
   event(type, d = {}) {
-    const q = this.mq(), S = this.S;
+    const q = this.mq(), S = this.S; this.missions?.onEvent(type, d);
     if (q) {
       if (type === 'visit_shrine' && q.obj === 'visit_shrine' && d.key === q.target) this.completeMain();
       else if (type === 'deliver' && q.obj === 'deliver' && d.npc === q.npc && d.item === q.item) this.completeMain();
@@ -172,7 +174,7 @@ class Game {
   acceptSide(q, giver) { if (this.S.side.length >= 6) { this.ui.toast('Too many tasks — finish or drop one'); return; } q.uid = 'q' + (this.S.uid++); q.giver = giver; this.S.side.push(q); this.S.track = q.uid; this.ui.toast(`Task: ${q.name}`, 'good');
     if (q.obj === 'gather' && this.has(q.item)) { } if (q.obj === 'escort') this.spawnEscort(); if (q.obj === 'rescue') { const l = this.npcById('luis'); l.obj.visible = true; l.hidden = false; } }
   turnIn(q) { const S = this.S; S.side = S.side.filter(x => x !== q); if (q.obj === 'gather' && q.giver !== 'board' && this.has(q.item)) this.take(q.item, Math.min(q.n, S.inv[q.item])); this.addXp(q.xp * (q.obj === 'deliver' || q.giver === 'poor_1' ? 1 + this.skill('almsgiver') * 0.15 : 1)); S.coin += q.coin; this.ui.toast(`✓ ${q.name}  +${q.xp} XP · ${q.coin} coin`, 'gold'); this.audio.coin(); if (S.track === q.uid) S.track = 'main'; if (q.obj === 'rescue') { const l = this.npcById('luis'); l.follow = false; } this.save(); }
-  giverName(id) { return id === 'board' ? 'the notice board' : (NPC_DEFS.find(d => d.id === id)?.name || id); }
+  giverName(id) { return id === 'board' ? 'the notice board' : (NPC_DEFS.find(d => d.id === id)?.name || this.npcById(id)?.name || id); }
   npcById(id) { return this.npcs.find(n => n.id === id); }
   boardOffers() { const S = this.S; if (S.boardDay !== S.day || !S.board.length) { S.boardDay = S.day; const rng = mulberry(S.day * 131 + S.lvl); const ok = SIDE_TEMPLATES.filter(t => t.minLvl <= S.lvl + 1 && !['find_pilgrim', 'escort', 'deliver_bread'].includes(t.id) || t.id === 'escort' && S.lvl >= 3); S.board = []; const used = new Set(); for (let i = 0; i < 12 && S.board.length < 3; i++) { const t = ok[Math.floor(rng() * ok.length)]; if (used.has(t.id)) continue; used.add(t.id); const q = this.makeSide(t.id, rng()); this.S.uid--; S.board.push(q); } } return S.board; }
   openBoard(title = 'Notice board') {
@@ -181,10 +183,13 @@ class Game {
   }
   spawnEscort() { const d = { id: 'escortee', name: 'Pilgrim Sofía', x: this.player.pos.x + 1.5, z: this.player.pos.z + 1.5, look: { sex: 'f', outfit: 'Ranger', hair: ['Hair_Long'], tints: { cloth: 0x6a4a5a } }, talk: () => ({ t: 'Lead on — Santiago is east, along the shells.', c: [{ t: 'Stay close.' }] }) }; const n = new NPC(this, d); n.follow = true; n.obj.traverse(m => { if (m.isMesh && /Hood/.test(m.name)) m.visible = false; }); this.npcs.push(n); this.escortee = n; }
   trackTarget() {
-    const S = this.S; let q = S.track !== 'main' ? S.side.find(s => s.uid === S.track) : null; const P = this.player.pos;
+    const S = this.S; const P = this.player.pos; const M = this.missions;
+    if (M && S.track?.startsWith('m:')) { const r = M.target(S.track.slice(2)); if (r) return r; S.track = 'main'; }
+    if (M && S.track?.startsWith('g:')) { const m = M.byId[S.track.slice(2)]; const n = m && !M.isActive(m.id) && !M.isDone(m.id) && this.npcById(m.giver); if (n) return { name: m.name, obj: `Talk to ${n.name} to start this mission`, pos: n.pos, place: m.area }; S.track = M.isActive(S.track.slice(2)) ? 'm:' + S.track.slice(2) : 'main'; }
+    let q = S.track !== 'main' ? S.side.find(s => s.uid === S.track) : null;
     if (!q && S.track === 'main' && this.mq()) { const m = this.mq(); let pos = PLACES[m.target] || (m.enemy === 'demon' ? PLACES.chapel : null);
       if (m.npc) { const n = this.npcById(m.npc); if (n) pos = n.pos; } return { name: m.name, obj: m.desc + (m.obj === 'kill' ? ` (${S.mqProg}/${m.count})` : ''), pos }; }
-    if (!q) q = S.side[0]; if (!q) return this.mq() ? null : { name: 'Free roam', obj: 'Check the notice board in San Roque or ask the town guard for bounties.', pos: null };
+    if (!q) q = S.side[0]; if (!q) { const a = M?.activeIds()[0]; if (a) { S.track = 'm:' + a; return M.target(a); } return M?.suggestTarget() || { name: 'Free roam', obj: 'Check the notice board in San Roque or ask the town guard for bounties.', pos: PLACES.notice }; }
     let pos = null;
     if (q.done) pos = q.giver === 'board' ? PLACES.notice : this.npcById(q.giver)?.pos;
     else if (q.obj === 'kill') { let best = 1e9; for (const s of SPAWNS) if (s.type === q.enemy) { const d = Math.hypot(s.x - P.x, s.z - P.z); if (d < best) { best = d; pos = { x: s.x, z: s.z }; } } }
@@ -229,11 +234,12 @@ class Game {
   }
   spawnNPCs() {
     const st = this.world.stalls;
-    for (const d0 of NPC_DEFS) { const d = { ...d0 }; if (d.stall) { const s = st[d.stall]; if (!s) continue; d.x = s.npcX; d.z = s.npcZ; d.yaw = s.ry; }
+    for (const d0 of [...NPC_DEFS, ...MISSION_NPCS]) { const d = { ...d0 }; if (d.stall) { const s = st[d.stall]; if (!s) continue; d.x = s.npcX; d.z = s.npcZ; d.yaw = s.ry; }
       const n = new NPC(this, d); if (d.scale) n.obj.scale.setScalar(d.scale); this.npcs.push(n);
       this.col.addCircle; }
     const l = this.npcById('luis'); if (!this.S.side.find(s => s.obj === 'rescue' && !s.done)) { l.obj.visible = false; l.hidden = true; }
     if (this.S.side.find(s => s.obj === 'escort' && !s.done)) this.spawnEscort();
+    this.missions = new Missions(this);
   }
   /** Santiago plaza: pilgrims arriving, resting on benches, praying at the cruceiro, chatting */
   spawnPlaza() {
@@ -284,6 +290,7 @@ class Game {
   pray(it) {
     const S = this.S, P = this.player; if (it.face != null) P.yaw = it.face; if (!P.doAnim('pray', 1.8)) return; this.audio.choir(); this.fx.ring(P.pos, 0xffe7a0, 2.5);
     S.faith = this.maxFaith(); S.hp = Math.min(this.maxHp(), S.hp + this.maxHp() * 0.3);
+    this.event('kneel', { room: it.key });
     if (it.key === 'cathedral') { this.audio.bell(5); if (this.mq()?.obj === 'pray_cathedral') { this.event('pray_cathedral'); return; } this.ui.toast('You pray before the altar of the Apostle. Faith restored.', 'good'); }
     else if (it.key === 'mary') this.ui.toast('Hail Mary, full of grace… Faith restored.', 'good'); else this.ui.toast('You pray in the quiet church. Faith restored.', 'good');
   }
@@ -343,7 +350,7 @@ class Game {
     if (e.type === 'bandit_chief' && !this.has('chalice') && !(S.mq > 7)) items.chalice = 1; else if (e.type === 'bandit_chief' && S.mq > 7) delete items.chalice;
     if (Math.random() < (e.def.human ? 0.12 : 0.05) + (e.def.boss ? 0.5 : 0)) { const it = this.randomGear(e.lvl); if (it) items[it] = 1; }
     const coin = Math.round(e.def.coin * (0.6 + Math.random() * 0.8) * (1 + this.skill('scallop_luck') * 0.08) * (1 + 0.1 * e.lvl));
-    this.dropLoot(e.pos.x, e.pos.z, items, coin); this.event('kill', { enemy: e.type });
+    this.dropLoot(e.pos.x, e.pos.z, items, coin); this.event('kill', { enemy: e.type, e });
   }
   randomGear(lvl) { const roll = Math.random() * (1 + lvl * 0.25); const r = roll > 2.4 ? 'epic' : roll > 1.5 ? 'rare' : roll > 0.8 ? 'uncommon' : 'common'; const pool = Object.values(ITEMS).filter(i => i.slot && i.r === r); return pool.length ? pool[Math.floor(Math.random() * pool.length)].id : null; }
   dropLoot(x, z, items, coin) {
@@ -370,7 +377,7 @@ class Game {
   interact() { if (this.uiOpen() || this.player.busy) return; const b = this.curInteract; if (b) { this.audio.init(); b.fn(); } }
   uiOpen() { return this.ui.panelOpen() || this.ui.dialogOpen(); }
   onPanelClosed() { }
-  talk(n) { const node = n.def.talk(this); this.event('talk', { npc: n.id }); n.talking = true; this.ui.dialog(n.name, node.t, node.c, n); }
+  talk(n) { const node = this.missions.decorate(n, n.def.talk(this)); this.event('talk', { npc: n.id }); n.talking = true; this.ui.dialog(n.name, node.t, node.c, n); }
   gather(n) {
     const t = n.type; if (t === 'fish' && !this.has('fishing_rod')) { this.ui.toast('You need a fishing rod (workbench)'); return; } if (t === 'iron_ore' && !this.has('pickaxe')) { this.ui.toast('You need a pickaxe (workbench or smith)'); return; }
     const anim = t === 'wood' || t === 'oak_wood' ? 'chop' : t === 'fish' ? 'pray' : 'gather';
@@ -399,10 +406,11 @@ class Game {
       if (it.needsKey) this.take(it.needsKey, 1); S.opened[it.key] = 1; this.player.doAnim('chest', 1.2);
       setTimeout(() => { for (const id of it.loot) { if (id === 'coin') { const c = 40 + Math.round(Math.random() * 30); S.coin += c; this.ui.toast(`+${c} coin`); } else this.give(id, 1); } this.event('open', { key: it.key }); this.save(); }, 700);
     } else if (it.type === 'sign') this.ui.toast(it.text);
+    else if (it.type === 'mission') this.missions.pickup(it);
     else if (it.type === 'door') this.interiors.enter(it.id);
     else if (it.type === 'door_out') this.interiors.exit();
     else if (it.type === 'kneel') this.pray(it);
-    else if (it.type === 'votive') { if (S.coin < 1) { this.ui.toast('You have no coin to offer'); return; } const f = it.flames.find(i => this.interiors.flames.pos[i * 4 + 1] > 500); if (f == null) { this.ui.toast('Every candle is already burning'); return; } S.coin -= 1; this.interiors.flames.hide(f, false); S.faith = Math.min(this.maxFaith(), S.faith + 15); this.player.doAnim('pick', 0.8); this.ui.toast('You light a candle and offer a prayer. +15 faith', 'good'); }
+    else if (it.type === 'votive') { if (S.coin < 1) { this.ui.toast('You have no coin to offer'); return; } const f = it.flames.find(i => this.interiors.flames.pos[i * 4 + 1] > 500); if (f == null) { this.ui.toast('Every candle is already burning'); return; } S.coin -= 1; this.interiors.flames.hide(f, false); S.faith = Math.min(this.maxFaith(), S.faith + 15); this.player.doAnim('pick', 0.8); this.ui.toast('You light a candle and offer a prayer. +15 faith', 'good'); this.event('votive', { room: this.inside?.id }); }
     else if (it.type === 'confess') {
       if (S.flags.confessDay === S.day) { this.ui.toast('You have been to confession today. Go in peace.'); return; }
       this.ui.dialog('Priest (behind the grille)', 'In the name of the Father, and of the Son, and of the Holy Spirit. Speak freely, pilgrim — what weighs on your heart?', [
@@ -416,7 +424,7 @@ class Game {
     const home = () => { base.style.left = ''; base.style.top = ''; base.style.bottom = ''; knob.style.transform = ''; base.classList.remove('sprint'); };
     let joyId = null, ox = 0, oy = 0;
     zone.addEventListener('pointerdown', e => { e.preventDefault(); this.audio.init(); joyId = e.pointerId; try { zone.setPointerCapture(e.pointerId); } catch (_) { } ox = e.clientX; oy = e.clientY; base.style.left = (ox - 58) + 'px'; base.style.top = (oy - 58) + 'px'; base.style.bottom = 'auto'; });
-    zone.addEventListener('pointermove', e => { if (e.pointerId !== joyId) return; let dx = e.clientX - ox, dy = e.clientY - oy; const d = Math.hypot(dx, dy), R = 50; const k = d > R ? R / d : 1; knob.style.transform = `translate(${dx * k}px,${dy * k}px)`; const m = Math.min(1, d / R); this.joy = { x: d ? dx / d * m : 0, y: d ? -dy / d * m : 0, sprint: d > R * 1.35 }; base.classList.toggle('sprint', d > R * 1.35); });
+    zone.addEventListener('pointermove', e => { if (e.pointerId !== joyId) return; let dx = e.clientX - ox, dy = e.clientY - oy; const d = Math.hypot(dx, dy), R = 50; const k = d > R ? R / d : 1; knob.style.transform = `translate(${dx * k}px,${dy * k}px)`; const m = Math.min(1, d / R); this.joy = { x: d ? dx / d * m : 0, y: d ? -dy / d * m : 0 }; });
     const jend = e => { if (e.pointerId !== joyId) return; joyId = null; this.joy = null; home(); };
     zone.addEventListener('pointerup', jend); zone.addEventListener('pointercancel', jend);
     // camera drag on canvas (touch: anywhere not on UI; mouse: drag or pointer lock)
@@ -434,8 +442,12 @@ class Game {
     btn('aPray', () => P().pray()); btn('aLock', () => this.toggleLock()); btn('aUse', () => this.interact());
     const wB = document.getElementById('bWalk'), sB = document.getElementById('bSprint');
     this.setWalk = v => { this.walkMode = v; wB.setAttribute('aria-pressed', v); if (v) this.setSprint(false); };
-    this.setSprint = v => { this.sprintLatch = v; sB.setAttribute('aria-pressed', v); if (v && this.walkMode) this.setWalk(false); };
-    for (const [b, f] of [[wB, () => this.setWalk(!this.walkMode)], [sB, () => this.setSprint(!this.sprintLatch)]]) b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); this.audio.init(); f(); });
+    this.setSprint = v => { this.sprintLatch = v; this._sprMoved = false; this._idleT = 0; sB.setAttribute('aria-pressed', v); if (v && this.walkMode) this.setWalk(false); };
+    for (const [b, f] of [[wB, () => { this.setWalk(!this.walkMode); this.ui.toast(this.walkMode ? 'Walking' : 'Jogging', '', 900); }], [sB, () => { if (!this.sprintLatch && this.S.stamina < 8) { this.ui.toast('Too tired to sprint', '', 1100); return; } this.setSprint(!this.sprintLatch); this.ui.toast(this.sprintLatch ? 'Sprinting' : 'Jogging', '', 900); }]]) {
+      // pointerdown fires the toggle once; touchstart/click are swallowed so a tap can never double-toggle or reach the joystick/camera underneath
+      let lastT = 0; const fire = e => { e.preventDefault(); e.stopPropagation(); const now = performance.now(); if (now - lastT < 250) return; lastT = now; this.audio.init(); f(); };
+      b.addEventListener('pointerdown', fire); b.addEventListener('touchstart', e => { e.stopPropagation(); if (e.cancelable) e.preventDefault(); if (!window.PointerEvent) fire(e); }, { passive: false });
+      b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); }); for (const ev of ['pointerup', 'pointermove', 'touchend', 'touchmove']) b.addEventListener(ev, e => e.stopPropagation()); }
     addEventListener('keydown', e => { if (e.repeat) return; this.keys[e.code] = true; this.audio.init(); if (this.state !== 'play') return;
       if (this.ui.dialogOpen()) { const n = +e.key; if (n >= 1 && n <= 9) document.querySelectorAll('#dChoices button')[n - 1]?.click(); if (e.code === 'Escape') this.ui.closeDialog(); return; }
       if (e.code === 'Tab' || e.code === 'KeyI') { e.preventDefault(); this.ui.panelOpen() ? this.ui.closePanel() : this.ui.openPanel('inv'); return; }
@@ -451,8 +463,8 @@ class Game {
   readInput() {
     const k = this.keys, inp = this.inp; let mx = (k.KeyD || k.ArrowRight ? 1 : 0) - (k.KeyA || k.ArrowLeft ? 1 : 0), my = (k.KeyW || k.ArrowUp ? 1 : 0) - (k.KeyS || k.ArrowDown ? 1 : 0);
     if (mx || my) { const l = Math.hypot(mx, my); mx /= l; my /= l; inp.sprint = !!(k.ShiftLeft || k.ShiftRight); } else inp.sprint = false;
-    if (this.joy) { mx = this.joy.x; my = this.joy.y; inp.sprint = this.joy.sprint; }
-    if (this.sprintLatch) { if (Math.hypot(mx, my) > 0.2) { inp.sprint = true; this._idleT = 0; } else if ((this._idleT = (this._idleT || 0) + 1) > 30) this.setSprint(false); if (this.S.stamina <= 1) this.setSprint(false); }
+    if (this.joy) { mx = this.joy.x; my = this.joy.y; inp.sprint = false; }
+    if (this.sprintLatch) { if (Math.hypot(mx, my) > 0.2) { inp.sprint = true; this._idleT = 0; this._sprMoved = true; } else if (this._sprMoved && (this._idleT = (this._idleT || 0) + this._dt) > 0.8) { this.setSprint(false); this.ui.toast('Jogging', '', 900); } if (this.S.stamina <= 1) { this.setSprint(false); } }
     inp.walk = !!this.walkMode && !inp.sprint;
     if (this.debugJoy) { mx = this.debugJoy.x; my = this.debugJoy.y; inp.sprint = !!this.debugJoy.sprint; if (this.debugJoy.walk != null) inp.walk = this.debugJoy.walk; }
     if (this.uiOpen()) { mx = my = 0; }
@@ -471,7 +483,12 @@ class Game {
     c.curD = c.curD == null ? d : (d < c.curD ? d : c.curD + (d - c.curD) * Math.min(1, dt * 3));
     cam.position.copy(this.camTgt).addScaledVector(dir, c.curD); const gy = this.groundAt(cam.position.x, cam.position.z) + 0.3; if (cam.position.y < gy) cam.position.y = gy; if (this.inside && cam.position.y > this.inside.H - 0.3) cam.position.y = this.inside.H - 0.3;
     if (c.shakeT > 0) { c.shakeT = Math.max(0, c.shakeT - dt); const a = c.shakeT * 0.25; cam.position.x += (Math.random() - 0.5) * a; cam.position.y += (Math.random() - 0.5) * a; }
-    cam.lookAt(this.camTgt.x, this.camTgt.y + 0.05, this.camTgt.z);
+    // pace feedback: sprint widens the FOV a little and adds a subtle stride bob
+    const spr = P.sprinting && P.speed > 4.5 ? 1 : 0; this._sprK = (this._sprK || 0) + (spr - (this._sprK || 0)) * Math.min(1, dt * (spr ? 3 : 4));
+    const fk = this._sprK * 7; if (Math.abs(fk - (this._fovK || 0)) > 0.02) { this._fovK = fk; cam.fov = this.baseFov + fk; cam.updateProjectionMatrix(); }
+    this._bobPh = (this._bobPh || 0) + dt * P.speed * 1.55; const bob = this._sprK * 0.055; const by = Math.abs(Math.sin(this._bobPh)) * bob, bx = Math.sin(this._bobPh) * bob * 0.5;
+    cam.position.y += by; cam.position.x += rx * bx; cam.position.z += rz * bx;
+    cam.lookAt(this.camTgt.x, this.camTgt.y + 0.05 + by * 0.6, this.camTgt.z);
   }
   // ---------------- main loop ----------------
   frame() {
@@ -489,7 +506,7 @@ class Game {
     this.time = (this.time || 0) + dt;
     if (this.hitstop > 0) { this.hitstop -= dt; dt *= 0.15; }
     const S = this.S, P = this.player;
-    this.readInput(); P.update(dt, this.inp);
+    this._dt = dt; this.readInput(); P.update(dt, this.inp);
     S.time = (S.time + dt / 720) % 1; if (S.time < dt / 720) S.day++;
     // regen
     this.combatT = Math.max(0, (this.combatT || 0) - dt); this.sprintT = Math.max(0, (this.sprintT || 0) - dt);
@@ -517,8 +534,10 @@ class Game {
     // lamps (night)
     this.updateLamps(); this.updateSun(dt); this.updateCamera(dt);
     if (!this.inside) this.world.update(dt, this.time, P.pos.x, P.pos.z); else this.interiors.update(dt, this.time); this.fx.update(dt); tickFx(this.time);
+    this.missions.update(dt, this.time);
     this.birds.update(dt, P.pos, !this.inside && (this.dayAmt ?? 1) > 0.5); for (const c of this.critters) c.update(dt, !this.inside && Math.hypot(c.pos.x - P.pos.x, c.pos.z - P.pos.z) < 60);
     const rd = distToPolyline(P.pos.x, P.pos.z, RIVER).d; this.audio.update(dt, { day: this.dayAmt, riverD: this.inside ? 999 : rd, wind: this.inside ? 0.05 : 0.4 + 0.3 * Math.sin(this.time * 0.05), inTown: !this.inside && Math.hypot(P.pos.x - 196, P.pos.z + 184) < 60 });
+    { const stF = S.stamina / this.maxSt(); this._effort = (this._effort || 0) + (((P.sprinting ? 0.55 : 0) + (stF < 0.3 ? (0.3 - stF) * 2.2 : 0)) - (this._effort || 0)) * Math.min(1, dt * 1.5); this.audio.breathe(dt, P.dead ? 0 : Math.min(1, this._effort)); }
     this.uiT = (this.uiT || 0) - dt; if (this.uiT <= 0) { this.uiT = 0.1; this.ui.hud(); } this.mmT = (this.mmT || 0) - dt; if (this.mmT <= 0) { this.mmT = 0.2; this.ui.minimap(); }
     this.ui.overlays(dt);
     this.saveT = (this.saveT || 60) - dt; if (this.saveT <= 0) { this.saveT = 60; this.save(); }
@@ -541,7 +560,8 @@ class Game {
     this.pls.forEach((pl, i) => { const s = sorted[i]; if (!s || s[1] > 60 * 60) { pl.intensity = 0; return; } const l = s[0]; pl.position.set(l.x, l.y + 0.2, l.z); const fl = 0.9 + Math.sin(this.time * 17 + i) * 0.05 + Math.sin(this.time * 7.3 + i * 2) * 0.05; if (l.inner) { pl.color.copy(l.color); pl.intensity = l.power * fl; pl.distance = 14; } else { pl.color.setHex(0xffa850); pl.distance = 16; pl.intensity = (l.strong ? 14 : 8) * Math.max(night, l.strong ? 0.25 : 0) * fl; } });
     for (const l of L) if (l.mesh) l.mesh.material.emissiveIntensity = 0.2 + night * 2.5;
   }
-  surfaceType(x, z) { if (this.col.surfaceAt(x, z) > -100) return 'stone'; const h = heightAt(x, z); if (h < WATER - 0.1) return 'water'; const s = splatAt(x, z, h, 0); if (s[2] > 0.5) return 'stone'; if (s[0] > 0.5) return 'path'; return 'grass'; }
+  nearRiver(x, z) { const c = this._nrC; if (c && Math.abs(c.x - x) < 0.5 && Math.abs(c.z - z) < 0.5) return c.v; const v = distToPolyline(x, z, RIVER).d < 15; this._nrC = { x, z, v }; return v; }
+  surfaceType(x, z) { if (this.inside) { const k = this.inside.door?.kind; return k === 'church' || k === 'cathedral' ? 'stone' : 'wood'; } if (this.col.surfaceAt(x, z) > -100) return 'stone'; const h = heightAt(x, z); if (h < WATER - 0.1 && this.nearRiver(x, z)) return 'water'; const s = splatAt(x, z, h, 0); if (s[2] > 0.5) return 'stone'; if (s[0] > 0.5) return 'path'; return 'grass'; }
   respawn() {
     if (this.inside) { this.inside.group.visible = false; this.inside = null; this.interiors.inside = null; this.setInterior(false); }
     const S = this.S, P = this.player; const sh = this.world.interactives.find(i => i.type === 'shrine' && i.key === S.respawn) || this.world.interactives.find(i => i.type === 'shrine');

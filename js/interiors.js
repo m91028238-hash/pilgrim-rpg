@@ -1,11 +1,11 @@
 // Enterable interiors: built lazily at remote coordinates (x > IX) and swapped in with a short fade.
 import * as THREE from 'three';
-import { kitPieces, Batch, M4 } from './world.js?v=4';
-import { loadInterior } from './assets.js?v=4';
-import { makeHuman } from './human.js?v=4';
-import { makeHat, makeWeapon, attachWeapon } from './gear.js?v=4';
-import { NPC } from './actors.js?v=4';
-import { Flames, dustMotes } from './fx.js?v=4';
+import { kitPieces, Batch, M4 } from './world.js?v=5';
+import { loadInterior } from './assets.js?v=5';
+import { makeHuman } from './human.js?v=5';
+import { makeHat, makeWeapon, attachWeapon } from './gear.js?v=5';
+import { NPC } from './actors.js?v=5';
+import { Flames, dustMotes } from './fx.js?v=5';
 
 export const IX = 900; // anything beyond x = IX is interior space
 const SLOT = { cathedral: 0, church_vf: 1, inn_sr: 2, inn_st: 3, shop_st: 4, house_sr1: 5, house_sr2: 6, house_st: 7 };
