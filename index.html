@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#1a2a1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>The Pilgrim's Way</title>
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<div id="title" class="overlay">
+  <div class="title-card">
+    <div class="title-cross">✝</div>
+    <h1>The Pilgrim's Way</h1>
+    <p class="sub">Region 1 · Camino de Santiago</p>
+    <button id="btn-continue" class="btn primary" disabled>Continue</button>
+    <button id="btn-new" class="btn">New Game</button>
+  </div>
+</div>
+<div id="hud" class="hidden">
+  <div id="topbar">
+    <div class="stat"><span class="lbl">HP</span><div class="bar"><i id="hp-fill"></i></div><span id="hp-txt">100</span></div>
+    <div class="stat"><span class="lbl">ST</span><div class="bar st"><i id="st-fill"></i></div></div>
+    <div class="stat"><span class="lbl">FD</span><div class="bar fd"><i id="fd-fill"></i></div></div>
+    <div class="stat"><span class="lbl">FA</span><div class="bar fa"><i id="fa-fill"></i></div></div>
+    <div id="coins">◈ 0</div>
+    <div id="lvl">Lv 1</div>
+  </div>
+  <div id="toasts"></div>
+  <div id="quest-panel">
+    <div id="q-title">—</div>
+    <div id="q-desc"></div>
+    <div id="q-arrow">↑</div>
+  </div>
+  <div id="interact-hint" class="hidden"></div>
+  <canvas id="minimap" width="96" height="96"></canvas>
+</div>
+<div id="joy-zone"><div id="joy-base"><div id="joy-stick"></div></div></div>
+<div id="btn-zone" class="hidden">
+  <button class="abtn" id="btn-attack" data-a="attack">⚔</button>
+  <button class="abtn" id="btn-block" data-a="block">✝</button>
+  <button class="abtn" id="btn-interact" data-a="interact">✋</button>
+  <button class="abtn" id="btn-sprint" data-a="sprint">⇢</button>
+  <button class="abtn" id="btn-bag" data-a="bag">🎒</button>
+</div>
+<div id="panel" class="overlay hidden">
+  <div class="panel-card">
+    <div class="panel-head"><h2 id="panel-title">Bag</h2><button id="panel-close" class="btn sm">✕</button></div>
+    <div id="panel-tabs"></div>
+    <div id="panel-body"></div>
+  </div>
+</div>
+<div id="fps" class="hidden"></div>
+<script type="module" src="js/main.js?v=1"></script>
+</body>
+</html>
