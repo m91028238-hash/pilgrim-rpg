@@ -51,7 +51,7 @@ export function dressPilgrim(h, equip) {
   const show = (grp, v) => (ud.parts[grp] || []).forEach(m => m.visible = v);
   show(sex + 'Peasant', !hasCloak); show(sex + 'Ranger', hasCloak);
   const body = ITEMS[equip.body], cloak = ITEMS[equip.cloak], boots = ITEMS[equip.boots];
-  const tint = (grp, hex, filter) => (ud.parts[grp] || []).forEach(m => { if (/Regular/.test(m.material.name)) return; if (filter && !filter(m)) return; m.material.color.setHex(hex); });
+  const tint = (grp, hex, filter) => (ud.parts[grp] || []).forEach(m => { if (/Regular/.test(m.material.name)) return; if (filter && !filter(m)) return; m.material.color.setHex(hex).lerp(new THREE.Color(0xffffff), 0.45); });
   tint(sex + 'Peasant', CLOTH[body?.r] ?? 0xb0a080);
   if (hasCloak) { tint(sex + 'Ranger', CLOAK[cloak.r], m => !/Feet|Boot/.test(m.name)); }
   const bootC = boots ? ({ common: 0x9a8064, uncommon: 0x6a4a30, rare: 0x3a2a20, blessed: 0x8a6a3a })[boots.r] ?? 0x5a4030 : 0xb09070;

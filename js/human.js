@@ -23,7 +23,7 @@ export function makeHuman(A, opts = {}) {
         o.material = o.material.clone();
         o.material.envMapIntensity = 0.8;
         if (/^(Hair_|Eyebrows)/.test(g || '')) o.material.color.setHex(opts.hairTint ?? HAIR[Math.floor(Math.random() * HAIR.length)]);
-        if (opts.tints && g === outfit && opts.tints.cloth != null && !/Regular/.test(o.material.name)) o.material.color.setHex(opts.tints.cloth);
+        if (opts.tints && g === outfit && opts.tints.cloth != null && !/Regular/.test(o.material.name)) o.material.color.setHex(opts.tints.cloth).lerp(new THREE.Color(0xffffff), 0.4);
         if (opts.demon) { o.material.color.setHex(0x0d0612); o.material.emissive = new THREE.Color(0x2a0838); o.material.roughness = 0.35; o.material.metalness = 0.2; o.material.transparent = true; o.material.opacity = 0.92; }
       }
       (parts[g] ||= []).push(o);

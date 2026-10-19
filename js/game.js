@@ -41,7 +41,7 @@ class Game {
     this.enemies = []; this.npcs = []; this.loot = []; this.tokens = new Set(); this.spawnState = SPAWNS.map(() => ({ alive: [], timer: 0 }));
     this.inp = { mx: 0, my: 0, sprint: false, block: false }; this.keys = {};
     this.cam = { yaw: 0, pitch: 0.28, dist: 4.2, shakeT: 0, shake(a) { this.shakeT = Math.max(this.shakeT, a); }, lastInput: 0 };
-    addEventListener('resize', () => { r.setSize(innerWidth, innerHeight); this.camera.aspect = innerWidth / innerHeight; this.camera.updateProjectionMatrix(); });
+    const fit = () => { r.setSize(innerWidth, innerHeight); this.camera.aspect = innerWidth / innerHeight; this.camera.fov = this.camera.aspect < 1 ? 72 : 58; this.camera.updateProjectionMatrix(); }; addEventListener('resize', fit); fit();
     window.G = this;
   }
   async boot() {

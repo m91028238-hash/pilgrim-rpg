@@ -57,7 +57,7 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .ab.big{width:80px;height:80px;right:0;bottom:0;font-size:32px;border-color:#d8b25a}
 .ab.sm{width:44px;height:44px;font-size:18px}
 .ab.on,.ab:active{background:rgba(216,178,90,.45)}
-#aHeavy{right:92px;bottom:2px}#aRoll{right:10px;bottom:92px}#aBlock{right:76px;bottom:72px}#aPray{right:142px;bottom:68px}#aLock{right:132px;bottom:128px}
+#aHeavy{right:92px;bottom:2px}#aRoll{right:10px;bottom:92px}#aBlock{right:84px;bottom:84px}#aPray{right:142px;bottom:68px}#aLock{right:150px;bottom:130px}
 #quick{position:absolute;right:calc(16px + env(safe-area-inset-right));bottom:calc(240px + env(safe-area-inset-bottom));display:flex;gap:8px}
 .qs{width:44px;height:44px;border-radius:10px;border:1px solid rgba(255,255,255,.25);background:rgba(20,16,12,.55);font-size:20px;position:relative;padding:0}
 .qs small{position:absolute;right:3px;bottom:1px;font-size:10px;font-family:system-ui}
