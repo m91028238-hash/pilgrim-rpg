@@ -1,0 +1,70 @@
+<!doctype html><html><body style="margin:0;background:#888">
+<canvas id="atlas" width="2048" height="2048"></canvas>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
+<script type="module">
+// Offline baker: renders Poly Haven CC0 plant scans into a 4x4 alpha-card atlas.
+// Run with tools/bake_foliage.py (serves models from /tmp/phm, alpha masks from /tmp/ph2).
+import * as THREE from 'three';
+import { GLTFLoader } from './vendor/addons/loaders/GLTFLoader.js';
+THREE.Cache.enabled = false;
+const T = 512, R = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
+R.setSize(T, T); R.setPixelRatio(1); R.outputColorSpace = THREE.SRGBColorSpace; R.toneMapping = THREE.NoToneMapping; R.setClearColor(0x000000, 0);
+const atlas = document.getElementById('atlas').getContext('2d');
+const gl = new GLTFLoader(), tl = new THREE.TextureLoader();
+const cache = {};
+async function model(name) {
+  if (cache[name]) return cache[name];
+  const g = await gl.loadAsync(`phm/${name}/${name}.gltf`);
+  const am = await tl.loadAsync(`ph2/${name}_alpha.jpg`); am.flipY = false;
+  g.scene.traverse(o => { if (o.isMesh) { const m = o.material; m.alphaMap = am; m.transparent = false; m.alphaTest = 0.45; m.side = THREE.DoubleSide; m.needsUpdate = true; m.roughness = 1; m.metalness = 0; } });
+  return (cache[name] = g.scene);
+}
+function nodes(root, filt) { const out = []; root.children.forEach(c => { if (filt(c.name)) out.push(c); }); return out; }
+// tile: list of [modelName, nodeFilter, x, z, rotY, scale]
+// tile: [width m, height m, [[model, nodeFilter, count, spread, depth, scale, tint]...], paint]
+const G2 = n => /grass_medium_02/.test(n) || true;
+const TILES = [
+  [0.9, 0.55, [['grass_medium_02', G2, 26, 0.75, 0.3, 1.0]]],
+  [1.0, 0.85, [['grass_medium_02', G2, 22, 0.8, 0.3, 1.55], ['weed_plant_02', n => /_a_/.test(n), 1, 0.2, 0.1, 0.8]]],
+  [0.9, 0.55, [['grass_medium_02', G2, 20, 0.75, 0.3, 1.0], ['dandelion_01', n => /_a_|_c_|_d_/.test(n), 5, 0.7, 0.2, 1.0]]],
+  [0.9, 0.55, [['grass_medium_02', G2, 18, 0.75, 0.3, 1.0], ['celandine_01', n => true, 6, 0.75, 0.25, 1.1]]],
+  [0.9, 0.6, [['grass_medium_02', G2, 18, 0.75, 0.3, 1.0], ['periwinkle_plant', n => true, 6, 0.75, 0.25, 1.0]]],
+  [0.9, 0.7, [['grass_medium_02', G2, 24, 0.75, 0.3, 1.2]], 'poppy'],
+  [1.0, 0.6, [['fern_02', n => /_a$/.test(n), 1, 0, 0, 1]]],
+  [1.1, 0.55, [['fern_02', n => /_c$|_d$/.test(n), 2, 0.3, 0.2, 1]]],
+  [0.8, 0.9, [['nettle_plant', n => true, 7, 0.55, 0.3, 2.3], ['grass_medium_02', G2, 10, 0.7, 0.2, 1.0]]],
+  [1.0, 0.5, [['weed_plant_02', n => true, 6, 0.7, 0.3, 1.0], ['grass_medium_02', G2, 8, 0.8, 0.2, 0.9]]],
+  [2.2, 1.4, [['shrub_04', n => true, 30, 2.0, 0.6, 4.2], ['nettle_plant', n => true, 8, 2.0, 0.4, 2.4], ['shrub_03', n => true, 6, 2.0, 0.5, 3.2]]],
+  [2.2, 1.4, [['shrub_04', n => true, 34, 2.0, 0.6, 4.6], ['fern_02', n => true, 3, 1.8, 0.3, 1.0], ['grass_medium_02', G2, 18, 2.0, 0.3, 1.5]]],
+  [1.2, 0.9, [['shrub_04', n => true, 16, 0.8, 0.6, 3.6], ['fern_02', n => /_b$/.test(n), 1, 0.2, 0.1, 0.9]]],
+  [0.9, 0.55, [['grass_medium_02', G2, 22, 0.75, 0.3, 1.0]], 'daisy'],
+  [1.0, 0.6, [['grass_medium_02', G2, 16, 0.8, 0.3, 1.1], ['celandine_01', n => true, 3, 0.8, 0.2, 1.0], ['periwinkle_plant', n => true, 3, 0.8, 0.2, 1.0], ['dandelion_01', n => /_a_/.test(n), 2, 0.7, 0.2, 1.0]]],
+  [1.0, 0.95, [['grass_medium_02', G2, 30, 0.85, 0.3, 1.8]], 'dry'],
+];
+const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 50);
+function rnd(seed) { return () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }; }
+window.bake = async () => {
+  const meta = [];
+  for (let i = 0; i < TILES.length; i++) {
+    const [W, H, parts, paint] = TILES[i]; const r = rnd(1000 + i * 77);
+    const scene = new THREE.Scene();
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x9a9a88, 2.0));
+    const d = new THREE.DirectionalLight(0xffffff, 1.7); d.position.set(0.3, 1, 1.4); scene.add(d);
+    const grp = new THREE.Group(); scene.add(grp);
+    for (const [name, filt, count, spread, depth, sc] of parts) {
+      const root = await model(name); const list = nodes(root, filt);
+      for (let k = 0; k < count; k++) { const src = list[Math.floor(r() * list.length)]; const c = src.clone(); c.position.set((r() - 0.5) * spread, 0, (r() - 0.5) * depth); c.rotation.y = r() * 6.28; c.scale.multiplyScalar(sc * (0.8 + r() * 0.4));
+        if (name === 'grass_medium_02' && paint !== 'dry') c.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.setRGB(0.78, 1.0, 0.6); } });
+        if (paint === 'dry') c.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.setRGB(1.25, 1.05, 0.62); } });
+        grp.add(c); }
+    }
+    cam.left = -W / 2; cam.right = W / 2; cam.top = H; cam.bottom = 0; cam.updateProjectionMatrix();
+    cam.position.set(0, 0, 10); cam.lookAt(0, 0, 0);
+    R.render(scene, cam);
+    atlas.drawImage(R.domElement, (i % 4) * T, Math.floor(i / 4) * T);
+    meta.push({ i, w: W, h: H, paint: paint || '' });
+  }
+  return { png: document.getElementById('atlas').toDataURL('image/png'), meta };
+};
+window.ready = true;
+</script></body></html>

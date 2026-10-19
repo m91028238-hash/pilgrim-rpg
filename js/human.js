@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { clone as skClone } from '../vendor/addons/utils/SkeletonUtils.js?v=3';
+import { clone as skClone } from '../vendor/addons/utils/SkeletonUtils.js?v=4';
+import { neutralise } from './gear.js?v=4';
 
 /** Build a skinned human from the composed Quaternius glb.
  *  opts: { sex:'m'|'f', outfit:'Peasant'|'Ranger', hair:'Hair_Beard'|..., tints:{cloth:hex, skin:hex}, demon:bool } */
@@ -23,7 +24,7 @@ export function makeHuman(A, opts = {}) {
         o.material = o.material.clone();
         o.material.envMapIntensity = 0.8;
         if (/^(Hair_|Eyebrows)/.test(g || '')) o.material.color.setHex(opts.hairTint ?? HAIR[Math.floor(Math.random() * HAIR.length)]);
-        if (opts.tints && g === outfit && opts.tints.cloth != null && !/Regular/.test(o.material.name)) o.material.color.setHex(opts.tints.cloth).lerp(new THREE.Color(0xffffff), 0.4);
+        if (opts.tints && g === outfit && opts.tints.cloth != null && !/Regular/.test(o.material.name)) { neutralise(o.material); o.material.color.setHex(/Belt|Bracer|Feet|Boot/.test(o.name) ? 0x4a3628 : opts.tints.cloth).lerp(new THREE.Color(0xffffff), 0.15); }
         if (opts.demon) { o.material.color.setHex(0x0d0612); o.material.emissive = new THREE.Color(0x2a0838); o.material.roughness = 0.35; o.material.metalness = 0.2; o.material.transparent = true; o.material.opacity = 0.92; }
       }
       (parts[g] ||= []).push(o);

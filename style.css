@@ -38,7 +38,7 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .toast{background:rgba(20,16,12,.78);border:1px solid #d8b25a55;padding:4px 11px;border-radius:14px;font-size:12.5px;font-family:system-ui,sans-serif;animation:tin .2s ease-out;max-width:100%;text-align:center}
 .toast.out{opacity:0;transition:opacity .4s}.toast.good{border-color:#8ac46a88}.toast.gold{border-color:#d8b25a;color:#f5dc9a}
 @keyframes tin{from{opacity:0;transform:translateY(-6px)}to{opacity:1}}
-#prompt{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(272px + env(safe-area-inset-bottom));background:rgba(20,16,12,.82);border:1px solid #d8b25a;border-radius:20px;padding:8px 16px;font-size:14px;white-space:nowrap;max-width:88%;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+#prompt{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(296px + env(safe-area-inset-bottom));background:rgba(20,16,12,.82);border:1px solid #d8b25a;border-radius:20px;padding:8px 16px;font-size:14px;white-space:nowrap;max-width:88%;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
 #prompt kbd{font-family:system-ui;background:#d8b25a;color:#1a140e;border-radius:4px;padding:0 5px;margin-right:6px;font-size:12px}
 #beacon{position:absolute;left:0;top:0;pointer-events:none;transform:translate(-50%,-50%);text-align:center;font-family:system-ui,sans-serif;font-size:11px;text-shadow:0 1px 2px #000}
 #beacon i{display:block;width:12px;height:12px;margin:0 auto 2px;border:2px solid #f0cf72;transform:rotate(45deg);background:#f0cf7244}
@@ -52,13 +52,27 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 #joyBase{position:absolute;left:calc(26px + env(safe-area-inset-left));bottom:calc(44px + env(safe-area-inset-bottom));width:116px;height:116px;border-radius:50%;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.18);pointer-events:none}
 #joyKnob{position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px;border-radius:50%;background:rgba(255,255,255,.28);border:1px solid rgba(255,255,255,.4)}
 #joyBase.sprint{border-color:#e8c46a}
-#actions{position:absolute;right:calc(16px + env(safe-area-inset-right));bottom:calc(36px + env(safe-area-inset-bottom));width:196px;height:196px;pointer-events:none}
-.ab{position:absolute;width:56px;height:56px;border-radius:50%;border:1.5px solid rgba(255,255,255,.3);background:rgba(20,16,12,.55);font-size:22px;pointer-events:auto;display:flex;align-items:center;justify-content:center;touch-action:none}
-.ab.big{width:80px;height:80px;right:0;bottom:0;font-size:32px;border-color:#d8b25a}
-.ab.sm{width:44px;height:44px;font-size:18px}
-.ab.on,.ab:active{background:rgba(216,178,90,.45)}
-#aHeavy{right:92px;bottom:2px}#aRoll{right:10px;bottom:92px}#aBlock{right:84px;bottom:84px}#aPray{right:142px;bottom:68px}#aLock{right:150px;bottom:130px}
-#quick{position:absolute;right:calc(16px + env(safe-area-inset-right));bottom:calc(240px + env(safe-area-inset-bottom));display:flex;gap:8px}
+#actions{position:absolute;right:calc(14px + env(safe-area-inset-right));bottom:calc(30px + env(safe-area-inset-bottom));width:236px;height:250px;pointer-events:none}
+.ab{position:absolute;width:64px;height:64px;border-radius:50%;border:1.5px solid rgba(255,255,255,.34);background:rgba(20,16,12,.58);color:#f3ead8;pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;touch-action:none;padding:0;font-family:system-ui,sans-serif;transition:opacity .25s,transform .25s;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+.ab svg{width:26px;height:26px;pointer-events:none}.ab i{display:contents;font-style:normal}
+.ab span{font-size:10.5px;font-weight:600;letter-spacing:.02em;line-height:1;pointer-events:none;text-shadow:0 1px 2px #000}
+.ab.big{width:88px;height:88px;right:0;bottom:0;border-color:#d8b25a;border-width:2px}.ab.big svg{width:36px;height:36px}.ab.big span{font-size:12px}
+.ab.sm{width:50px;height:50px}.ab.sm svg{width:20px;height:20px}.ab.sm span{font-size:9.5px}
+.ab.on,.ab:active{background:rgba(216,178,90,.5)}
+#aHeavy{right:98px;bottom:4px}#aBlock{right:86px;bottom:86px}#aRoll{right:6px;bottom:100px}#aLock{right:168px;bottom:120px}#aPray{right:176px;bottom:52px}
+#aUse{right:0;bottom:0;width:88px;height:88px;border-color:#e8c46a;border-width:2px;background:rgba(60,44,18,.68)}#aUse svg{width:32px;height:32px}#aUse span{font-size:11.5px;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#actions:not(.combat) .cmb:not(#aPray){opacity:0;transform:scale(.6);pointer-events:none}
+#actions:not(.combat) #aPray{right:8px;bottom:104px}
+#actions.combat #aUse{right:24px;bottom:170px;width:62px;height:62px}#actions.combat #aUse svg{width:22px;height:22px}#actions.combat #aUse span{font-size:9.5px}
+#aUse.hidden{opacity:0;transform:scale(.6);pointer-events:none;display:flex}
+.ab.tut{animation:tut 1s ease-in-out infinite;border-color:#ffe08a}
+@keyframes tut{0%,100%{box-shadow:0 0 0 0 rgba(255,224,138,.0)}50%{box-shadow:0 0 0 7px rgba(255,224,138,.45)}}
+#moveBtns{position:absolute;left:calc(22px + env(safe-area-inset-left));bottom:calc(172px + env(safe-area-inset-bottom));display:flex;gap:8px;pointer-events:auto}
+.mv{display:flex;align-items:center;gap:4px;height:32px;padding:0 11px 0 8px;border-radius:16px;border:1.5px solid rgba(255,255,255,.3);background:rgba(20,16,12,.55);color:#f3ead8;font:600 12px system-ui,sans-serif;touch-action:none;-webkit-tap-highlight-color:transparent}
+.mv svg{width:17px;height:17px}.mv[aria-pressed=true]{background:rgba(216,178,90,.55);border-color:#e8c46a;color:#fff}
+body.desktop #moveBtns{display:none}
+#fade{position:absolute;inset:0;background:#0b0806;opacity:0;pointer-events:none;transition:opacity .28s}#fade.on{opacity:1}
+#quick{position:absolute;right:calc(16px + env(safe-area-inset-right));bottom:calc(290px + env(safe-area-inset-bottom));display:flex;gap:8px}
 .qs{width:44px;height:44px;border-radius:10px;border:1px solid rgba(255,255,255,.25);background:rgba(20,16,12,.55);font-size:20px;position:relative;padding:0}
 .qs small{position:absolute;right:3px;bottom:1px;font-size:10px;font-family:system-ui}
 #keys{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);font-size:11px;font-family:system-ui,sans-serif;opacity:.6;white-space:nowrap;pointer-events:none}

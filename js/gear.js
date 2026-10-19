@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ITEMS } from './data.js?v=3';
+import { ITEMS } from './data.js?v=4';
 // Procedural, attachable pilgrim gear. Visible tiers by rarity.
 const RCOL = { common: 0x6b4a2e, uncommon: 0x4f3520, rare: 0x3a3f46, epic: 0x6a5a8a, legendary: 0xd8b25a, blessed: 0xe8d6a0 };
 const HAT = { common: 0x7a6a50, uncommon: 0x5a4430, rare: 0x3b2c22, epic: 0x40304a, legendary: 0x2a2018, blessed: 0x6a5236 };
@@ -51,15 +51,42 @@ export function dressPilgrim(h, equip) {
   const show = (grp, v) => (ud.parts[grp] || []).forEach(m => m.visible = v);
   show(sex + 'Peasant', !hasCloak); show(sex + 'Ranger', hasCloak);
   const body = ITEMS[equip.body], cloak = ITEMS[equip.cloak], boots = ITEMS[equip.boots];
-  const tint = (grp, hex, filter) => (ud.parts[grp] || []).forEach(m => { if (/Regular/.test(m.material.name)) return; if (filter && !filter(m)) return; m.material.color.setHex(hex).lerp(new THREE.Color(0xffffff), 0.45); });
+  const tint = (grp, hex, filter) => (ud.parts[grp] || []).forEach(m => { if (/Regular/.test(m.material.name)) return; if (filter && !filter(m)) return; neutralise(m.material); m.material.color.setHex(hex).lerp(new THREE.Color(0xffffff), 0.12); });
   tint(sex + 'Peasant', CLOTH[body?.r] ?? 0xb0a080);
-  if (hasCloak) { tint(sex + 'Ranger', CLOAK[cloak.r], m => !/Feet|Boot/.test(m.name)); }
+  if (hasCloak) { tint(sex + 'Ranger', CLOAK[cloak.r], m => /Body$|Hood|Arms_1|Pauldron/.test(m.name)); tint(sex + 'Ranger', CLOTH[body?.r] ?? 0x8a7a62, m => /Legs/.test(m.name)); tint(sex + 'Ranger', 0x5a4030, m => /Belt|Bracer/.test(m.name)); }
   const bootC = boots ? ({ common: 0x9a8064, uncommon: 0x6a4a30, rare: 0x3a2a20, blessed: 0x8a6a3a })[boots.r] ?? 0x5a4030 : 0xb09070;
-  for (const g of [sex + 'Peasant', sex + 'Ranger']) (ud.parts[g] || []).forEach(m => { if (/Feet|Boot/.test(m.name)) m.material.color.setHex(bootC); });
+  for (const g of [sex + 'Peasant', sex + 'Ranger']) (ud.parts[g] || []).forEach(m => { if (/Feet|Boot/.test(m.name)) { neutralise(m.material); m.material.color.setHex(bootC); } });
   // hood hidden when wearing a hat
   (ud.parts[sex + 'Ranger'] || []).forEach(m => { if (/Hood/.test(m.name)) m.visible = hasCloak && !equip.hat; });
   if (equip.hat && b.Head) { const hat = makeHat(equip.hat); hat.position.set(0, 0.2, 0.01); hat.rotation.x = -0.12; b.Head.add(hat); ud._hat = hat; }
   if (b.hand_r) { const w = makeWeapon(equip.weapon || 'stick'); attachWeapon(b.hand_r, w); ud._wpn = w; }
 }
 
-export function attachWeapon(hand, w) { w.position.set(0.0, 0.085, 0.025); w.rotation.set(-0.695, -0.04, -2.988); hand.add(w); }
+/** Outfit textures/vertex colours are strongly hued (the Ranger set is green); desaturate them so a tint shows its true colour */
+export function neutralise(mat) {
+  if (mat.userData.neutral) return; mat.userData.neutral = true;
+  mat.onBeforeCompile = sh => {
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <map_fragment>', `#ifdef USE_MAP
+        vec4 sampledDiffuseColor = texture2D( map, vMapUv ); float lumT = dot(sampledDiffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+        sampledDiffuseColor.rgb = vec3(clamp(lumT * 1.9, 0.0, 1.2)); diffuseColor *= sampledDiffuseColor;
+        #endif`)
+      .replace('#include <color_fragment>', `#if defined( USE_COLOR ) || defined( USE_COLOR_ALPHA )
+        float lumC = dot(vColor.rgb, vec3(0.2126, 0.7152, 0.0722)); diffuseColor.rgb *= vec3(clamp(lumC * 1.9, 0.0, 1.2));
+        #endif`);
+  };
+  mat.customProgramCacheKey = () => 'neutral'; mat.needsUpdate = true;
+}
+/** Weapon grips: 0 = walking staff (upright), 1 = fighting grip (along the fist, like a sword) */
+const _q = new THREE.Quaternion(), _up = new THREE.Vector3(0, 1, 0);
+export function attachWeapon(hand, w) {
+  w.position.set(0.0, 0.085, 0.025); w.rotation.set(-0.695, -0.04, -2.988); hand.add(w);
+  const walk = { p: w.position.clone(), q: w.quaternion.clone() };
+  // the fist's long axis runs from the little finger to the index knuckle; a hilt (or staff) lies along it
+  const idx = hand.children.find(c => /^index_01/.test(c.name)), pky = hand.children.find(c => /^pinky_01/.test(c.name)), mid = hand.children.find(c => /^middle_01/.test(c.name));
+  let fight = walk;
+  if (idx && pky && mid) { const axis = idx.position.clone().sub(pky.position).normalize(); const palm = mid.position.clone().multiplyScalar(0.55); const thumb = hand.children.find(c => /^thumb_01/.test(c.name));
+    const q = new THREE.Quaternion().setFromUnitVectors(_up, axis); fight = { p: palm.add(thumb ? thumb.position.clone().multiplyScalar(0.15) : new THREE.Vector3()), q }; }
+  w.userData.grip = { walk, fight, k: 0 };
+}
+export function setGrip(w, target, dt) { const g = w.userData.grip; if (!g) return; const k = g.k + Math.sign(target - g.k) * Math.min(Math.abs(target - g.k), dt * 7); if (k === g.k && dt > 0) return; g.k = k; const e = k * k * (3 - 2 * k); w.position.lerpVectors(g.walk.p, g.fight.p, e); w.quaternion.slerpQuaternions(g.walk.q, g.fight.q, e); }
