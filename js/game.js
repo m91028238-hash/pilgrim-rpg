@@ -1,26 +1,27 @@
 import * as THREE from 'three';
-import './post.js?v=5';
-import { makeComposer } from './post.js?v=5';
-import { Sky } from '../vendor/addons/objects/Sky.js?v=5';
-import { loadAll } from './assets.js?v=5';
-import { buildWorld, PLACES, heightAt, splatAt, WATER, PATH, RIVER } from './world.js?v=5';
-import { Colliders } from './physics.js?v=5';
-import { Player, Enemy, NPC, Critter, groundY } from './actors.js?v=5';
-import { Interiors, IX } from './interiors.js?v=5';
-import { chimneySmoke, Birds, tickFx } from './fx.js?v=5';
-import { makeHat, makeWeapon, attachWeapon } from './gear.js?v=5';
-import { NPC_DEFS } from './npcs.js?v=5';
-import { Missions, MISSION_NPCS } from './missions.js?v=5';
-import { UI } from './ui.js?v=5';
-import { Audio } from './audio.js?v=5';
-import { ITEMS, SKILLS, RECIPES, MAIN_QUEST, SIDE_TEMPLATES, ENEMY_TYPES } from './data.js?v=5';
-import { distToPolyline, clamp, angDiff, mulberry, hash2, sstep, lerp } from './util.js?v=5';
+import './post.js?v=6';
+import { makeComposer } from './post.js?v=6';
+import { Sky } from '../vendor/addons/objects/Sky.js?v=6';
+import { loadAll } from './assets.js?v=6';
+import { PRAYERS, MYSTERIES, MYSTERY_DAY } from './prayers.js?v=6';
+import { buildWorld, PLACES, heightAt, splatAt, WATER, PATH, RIVER } from './world.js?v=6';
+import { Colliders } from './physics.js?v=6';
+import { Player, Enemy, NPC, Critter, groundY } from './actors.js?v=6';
+import { Interiors, IX } from './interiors.js?v=6';
+import { chimneySmoke, Birds, tickFx } from './fx.js?v=6';
+import { makeHat, makeWeapon, attachWeapon } from './gear.js?v=6';
+import { NPC_DEFS } from './npcs.js?v=6';
+import { Missions, MISSION_NPCS } from './missions.js?v=6';
+import { UI } from './ui.js?v=6';
+import { Audio } from './audio.js?v=6';
+import { ITEMS, SKILLS, RECIPES, MAIN_QUEST, SIDE_TEMPLATES, ENEMY_TYPES } from './data.js?v=6';
+import { distToPolyline, clamp, angDiff, mulberry, hash2, sstep, lerp } from './util.js?v=6';
 
 const SAVE = 'pr_save_v3';
 const QUAL = [
-  { level: 0, pr: 1.0, shadow: 1024, shadowR: 22, terrainSeg: 120, trees: 650, treeNear: 26, viewDist: 120, rocks: 160, grass: 400, grassDist: 18, lights: 2, aa: false, plaza: 6, birds: 10, smoke: 6, bloom: false },
-  { level: 1, pr: 1.25, shadow: 1024, shadowR: 30, terrainSeg: 160, trees: 900, treeNear: 36, viewDist: 160, rocks: 260, grass: 900, grassDist: 26, lights: 3, aa: true, plaza: 9, birds: 18, smoke: 8, bloom: false },
-  { level: 2, pr: 1.5, shadow: 2048, shadowR: 40, terrainSeg: 200, trees: 1100, treeNear: 50, viewDist: 220, rocks: 360, grass: 1600, grassDist: 34, lights: 5, aa: true, plaza: 12, birds: 27, smoke: 10, bloom: true },
+  { level: 0, pr: 1.0, shadow: 1024, shadowR: 22, terrainSeg: 120, trees: 650, treeNear: 34, viewDist: 120, rocks: 160, grass: 400, grassDist: 18, lights: 2, aa: false, plaza: 6, birds: 10, smoke: 6, bloom: false },
+  { level: 1, pr: 1.25, shadow: 1024, shadowR: 30, terrainSeg: 160, trees: 900, treeNear: 48, viewDist: 160, rocks: 260, grass: 900, grassDist: 26, lights: 3, aa: true, plaza: 9, birds: 18, smoke: 8, bloom: false },
+  { level: 2, pr: 1.5, shadow: 2048, shadowR: 40, terrainSeg: 200, trees: 1100, treeNear: 62, viewDist: 220, rocks: 360, grass: 1600, grassDist: 34, lights: 5, aa: true, plaza: 12, birds: 27, smoke: 10, bloom: true },
 ];
 const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 function autoQ() { const mem = navigator.deviceMemory || 4, cores = navigator.hardwareConcurrency || 4; if (isTouch) return (mem <= 3 || cores <= 4) ? 0 : 1; return 2; }
@@ -118,11 +119,11 @@ class Game {
   useItem(id) {
     const it = ITEMS[id]; const S = this.S; if (!it?.use || !this.has(id)) return;
     if (it.use === 'food' || it.use === 'heal') { const heal = (it.hp || 0) * (it.use === 'heal' ? 1 + this.skill('herbalist') * 0.15 : 1) + (it.hunger || 0) * 0.6 * (1 + this.skill('cook') * 0.1); S.hp = Math.min(this.maxHp(), S.hp + heal); if (it.faith) S.faith = Math.min(this.maxFaith(), S.faith + it.faith); this.player.doAnim('eat', 0.9); this.ui.toast(`${it.name}: +${Math.round(heal)} HP`, 'good'); }
-    else if (it.use === 'faith') { S.faith = Math.min(this.maxFaith(), S.faith + it.faith); this.ui.toast('+' + it.faith + ' faith', 'good'); }
+    else if (it.use === 'faith') { S.faith = Math.min(this.maxFaith(), S.faith + it.faith); this.ui.toast((id === 'blessing_scroll' ? 'You pray the Pilgrim\'s Prayer. ' : '') + '+' + it.faith + ' faith', 'good'); }
     else if (it.use === 'holy') { this.holyBurst(); }
     else if (it.use === 'candle') { const sh = this.nearInteractive('shrine', 4); if (!sh) { this.ui.toast('Light it at a shrine'); return; } this.lightShrine(sh); }
-    else if (it.use === 'bell') { this.ui.toast('The bell rings out. Shadows nearby flee.'); this.audio.bell(0); for (const e of this.enemies) if (e.alive && e.type === 'demon' && e.pos.distanceTo(this.player.pos) < 30) e.hurt(999, { x: 0, z: 0 }); }
-    else if (it.use === 'oil') { S.flags.oil = 1; this.ui.toast('Shrine oil: your next rest restores twice as much'); }
+    else if (it.use === 'bell') { this.ui.toast('You ring the Angelus and pray: "The Angel of the Lord declared unto Mary…" The shadows flee.'); this.audio.bell(0); for (const e of this.enemies) if (e.alive && e.type === 'demon' && e.pos.distanceTo(this.player.pos) < 30) e.hurt(999, { x: 0, z: 0 }); }
+    else if (it.use === 'oil') { S.flags.oil = 1; this.ui.toast('You fill the shrine lamp with oil: your next rest restores twice as much'); }
     else return;
     this.take(id, 1);
   }
@@ -206,7 +207,7 @@ class Game {
     this.sky.material.fog = false;
     this.sun = new THREE.DirectionalLight(0xffe4bc, 2.6); this.sun.castShadow = true; const sc = this.sun.shadow.camera; const R = Q.shadowR; sc.left = -R; sc.right = R; sc.top = R; sc.bottom = -R; sc.near = 1; sc.far = 220; this.sun.shadow.mapSize.set(Q.shadow, Q.shadow); this.sun.shadow.bias = -0.0004; this.sun.shadow.normalBias = 0.04; s.add(this.sun, this.sun.target);
     this.hemi = new THREE.HemisphereLight(0xc4d8f4, 0x6a5a3a, 0.35); s.add(this.hemi);
-    s.fog = new THREE.Fog(0xbfd0dc, 40, Q.viewDist * 1.08);
+    s.fog = new THREE.Fog(0xbfd0dc, Q.viewDist * 0.45, Q.viewDist * 1.25); // v6: less grey wash in the mid-distance
     this.pls = []; for (let i = 0; i < Q.lights; i++) { const l = new THREE.PointLight(0xffa850, 0, 16, 1.6); s.add(l); this.pls.push(l); }
     this.sunDir = new THREE.Vector3();
   }
@@ -222,7 +223,7 @@ class Game {
     const snap = 0.5; const tx = Math.round(P.x / snap) * snap, tz = Math.round(P.z / snap) * snap;
     this.sun.target.position.set(tx, P.y, tz); this.sun.position.set(tx + ld.x * 90, P.y + ld.y * 90, tz + ld.z * 90);
     this.hemi.intensity = 0.12 + 0.35 * day; this.scene.environmentIntensity = 0.12 + 0.75 * day;
-    const fc = new THREE.Color(0x0c121e).lerp(new THREE.Color(0xc9d6de), day); fc.lerp(new THREE.Color(0xe8c8a0), 0.12 * day); fc.lerp(new THREE.Color(0xd8a87a), dusk * 0.6); this.scene.fog.color.copy(fc);
+    const fc = new THREE.Color(0x0c121e).lerp(new THREE.Color(0xc2d5e4), day); fc.lerp(new THREE.Color(0xe8c8a0), 0.12 * day); fc.lerp(new THREE.Color(0xd8a87a), dusk * 0.6); this.scene.fog.color.copy(fc);
     if (this.smoke) this.smoke.material.uniforms.uDay.value = day;
     this.renderer.toneMappingExposure = 0.62 + 0.25 * day;
     this.dayAmt = day;
@@ -270,8 +271,8 @@ class Game {
   /** swap lighting/visibility for interior or exterior */
   setInterior(on, R) {
     const s = this.scene; this.world.group.visible = !on; this.sky.visible = !on; this.smoke.visible = !on; this.birds.mesh.visible = !on;
-    if (on) { s.background = new THREE.Color(0x0a0806); s.fog.color.setHex(R.fog[0]); s.fog.near = R.fog[1]; s.fog.far = R.fog[2]; this.cam.dist = R.W > 12 ? 4.2 : 3.2; }
-    else { s.background = null; s.fog.near = 40; s.fog.far = this.Q.viewDist * 1.08; this.cam.dist = 4.2; this.world.refreshVeg(); this.world.update(0, this.time || 0, this.player.pos.x, this.player.pos.z); }
+    if (on) { s.background = new THREE.Color(0x0a0806); s.fog.color.setHex(R.fog[0]); s.fog.near = R.fog[1]; s.fog.far = R.fog[2]; this.cam.dist = Math.min(5.8, Math.max(3.9, (R.W || 8) * 0.42)); this.cam.curD = null; }
+    else { s.background = null; s.fog.near = this.Q.viewDist * 0.45; s.fog.far = this.Q.viewDist * 1.25; this.cam.dist = 4.2; this.cam.curD = null; this.world.refreshVeg(); this.world.update(0, this.time || 0, this.player.pos.x, this.player.pos.z); }
     for (const l of this.pls) l.intensity = 0; this.updateSun(0);
   }
   interiorLight() {
@@ -288,11 +289,21 @@ class Game {
     if (S.time > 0.27) S.day++; S.time = 0.27; this.save(); this.ui.toast('You sleep soundly. Morning comes.', 'good'); this.audio.coin();
   }
   pray(it) {
-    const S = this.S, P = this.player; if (it.face != null) P.yaw = it.face; if (!P.doAnim('pray', 1.8)) return; this.audio.choir(); this.fx.ring(P.pos, 0xffe7a0, 2.5);
+    const S = this.S, P = this.player; if (it.face != null) P.yaw = it.face; if (!P.doAnim('kneel', 2.4)) return; this.audio.choir(); this.fx.ring(P.pos, 0xffe7a0, 2.5);
     S.faith = this.maxFaith(); S.hp = Math.min(this.maxHp(), S.hp + this.maxHp() * 0.3);
     this.event('kneel', { room: it.key });
-    if (it.key === 'cathedral') { this.audio.bell(5); if (this.mq()?.obj === 'pray_cathedral') { this.event('pray_cathedral'); return; } this.ui.toast('You pray before the altar of the Apostle. Faith restored.', 'good'); }
-    else if (it.key === 'mary') this.ui.toast('Hail Mary, full of grace… Faith restored.', 'good'); else this.ui.toast('You pray in the quiet church. Faith restored.', 'good');
+    if (it.key === 'cathedral') { this.audio.bell(5); if (this.mq()?.obj === 'pray_cathedral') { this.event('pray_cathedral'); return; } this.ui.toast('You kneel before the altar of the Apostle. Faith restored.', 'good'); }
+    else if (it.key === 'mary') this.ui.toast('You kneel before Our Lady. Faith restored.', 'good'); else this.ui.toast('You kneel at the altar rail. Faith restored.', 'good');
+    setTimeout(() => { if (!this.ui.dialogOpen()) this.prayerBook(it.key === 'mary' ? 'mary' : it.key === 'cathedral' ? 'pilgrim' : 'church'); }, 450);
+  }
+  /** choose a prayer; the full, exact text is shown in the dialog box */
+  prayerBook(kind = 'church') {
+    const show = k => () => ({ t: PRAYERS[k].name + '\n\n' + PRAYERS[k].text, c: [{ t: 'Amen.' }] });
+    const mys = MYSTERY_DAY[(this.S.day || 0) % 7]; const rosary = () => ({ t: `The ${mys} Mysteries\n` + MYSTERIES[mys].map((m, i) => `${i + 1}. ${m}`).join('\n') + '\n\n' + PRAYERS.rosary.text, c: [{ t: 'Pray the Our Father', f: show('our_father') }, { t: 'Pray the Hail Mary', f: show('hail_mary') }, { t: 'Pray the Glory Be', f: show('glory_be') }, { t: 'Amen.' }] });
+    const c = kind === 'mary' ? [{ t: 'Hail Mary', f: show('hail_mary') }, { t: 'A decade of the Rosary', f: rosary }, { t: 'The Angelus', f: show('angelus') }]
+      : kind === 'pilgrim' ? [{ t: "The Pilgrim's Prayer", f: show('pilgrim') }, { t: 'Our Father', f: show('our_father') }, { t: 'Glory Be', f: show('glory_be') }]
+        : [{ t: 'Our Father', f: show('our_father') }, { t: 'Hail Mary', f: show('hail_mary') }, { t: 'Glory Be', f: show('glory_be') }, { t: 'A decade of the Rosary', f: rosary }];
+    c.push({ t: 'Pray in silence' }); this.ui.dialog('Prayer', PRAYERS.sign.text, c);
   }
   // ---------------- spawning ----------------
   spawner(dt) {
@@ -334,10 +345,11 @@ class Game {
   prayBurst() {
     const P = this.player.pos, S = this.S; const heal = 6 + this.skill('healing_prayer') * 8; S.hp = Math.min(this.maxHp(), S.hp + heal);
     this.fx.ring(P, 0xffe7a0, 6);
+    if (this.enemies.some(e => e.alive && e.def.holyOnly && e.pos.distanceTo(P) < 12) && (!this._mikeT || performance.now() - this._mikeT > 9000)) { this._mikeT = performance.now(); this.ui.toast('"Saint Michael the Archangel, defend us in battle…"', 'gold'); }
     for (const e of this.enemies) { if (!e.alive || !e.active) continue; const d = e.pos.distanceTo(P); if (d > 6.5) continue; const dir = { x: (e.pos.x - P.x) / (d || 1), z: (e.pos.z - P.z) / (d || 1) };
       const dmg = e.def.holyOnly ? (42 + S.lvl * 3 + this.skill('exorcist') * 10) * (1 + this.skill('st_michael') * 0.08) : 8 + this.skill('exorcist') * 2; e.hurt(dmg, dir, e.def.holyOnly); this.ui.dmg(new THREE.Vector3(e.pos.x, e.pos.y + 1.6, e.pos.z), dmg, e.def.holyOnly ? 'crit' : ''); }
   }
-  holyBurst() { const P = this.player.pos; this.fx.ring(P, 0x9fd8ff, 5); this.audio.choir(); for (const e of this.enemies) { if (!e.alive) continue; const d = e.pos.distanceTo(P); if (d > 5.5) continue; const dmg = e.def.holyOnly ? 75 + this.skill('exorcist') * 12 : 14; e.hurt(dmg, { x: (e.pos.x - P.x) / (d || 1), z: (e.pos.z - P.z) / (d || 1) }, true); this.ui.dmg(new THREE.Vector3(e.pos.x, e.pos.y + 1.6, e.pos.z), dmg, 'crit'); } }
+  holyBurst() { const P = this.player.pos; this.fx.ring(P, 0x9fd8ff, 5); this.audio.choir(); this.ui.toast('You sprinkle holy water and make the Sign of the Cross.', 'good'); for (const e of this.enemies) { if (!e.alive) continue; const d = e.pos.distanceTo(P); if (d > 5.5) continue; const dmg = e.def.holyOnly ? 75 + this.skill('exorcist') * 12 : 14; e.hurt(dmg, { x: (e.pos.x - P.x) / (d || 1), z: (e.pos.z - P.z) / (d || 1) }, true); this.ui.dmg(new THREE.Vector3(e.pos.x, e.pos.y + 1.6, e.pos.z), dmg, 'crit'); } }
   enemyHits(e, heavy) {
     const dmg = e.atk * (0.85 + Math.random() * 0.3); const r = this.player.hurt(dmg, e.pos, heavy);
     if (r === 'parry') { e.stun = 1.3; e.state = 'recover'; e.t = -0.8; this.ui.toast('Perfect block'); e.kb.set(e.pos.x - this.player.pos.x, 0, e.pos.z - this.player.pos.z).setLength(4); }
@@ -380,7 +392,7 @@ class Game {
   talk(n) { const node = this.missions.decorate(n, n.def.talk(this)); this.event('talk', { npc: n.id }); n.talking = true; this.ui.dialog(n.name, node.t, node.c, n); }
   gather(n) {
     const t = n.type; if (t === 'fish' && !this.has('fishing_rod')) { this.ui.toast('You need a fishing rod (workbench)'); return; } if (t === 'iron_ore' && !this.has('pickaxe')) { this.ui.toast('You need a pickaxe (workbench or smith)'); return; }
-    const anim = t === 'wood' || t === 'oak_wood' ? 'chop' : t === 'fish' ? 'pray' : 'gather';
+    const anim = t === 'wood' || t === 'oak_wood' ? 'chop' : t === 'fish' ? 'cast' : 'gather';
     this.player.yaw = Math.atan2(n.x - this.player.pos.x, n.z - this.player.pos.z);
     this.player.start(anim, { dur: 1.1, done: () => {
       if (t === 'chapel_key') { this.give('chapel_key', 1); n.mesh.visible = false; n.respawn = 1e9; return; }
@@ -392,15 +404,18 @@ class Game {
   useInteractive(it) {
     const S = this.S;
     if (it.type === 'shrine') {
-      const rest = () => { const m = (1 + this.skill('shrine_keeper') * 0.2) * (S.flags.oil ? 2 : 1); S.flags.oil = 0; S.hp = this.maxHp(); S.stamina = this.maxSt(); S.faith = Math.min(this.maxFaith(), S.faith + this.maxFaith() * 0.5 * m); S.respawn = it.key; S.flags.martyrUsed = false; this.player.doAnim('pray', 1.2); this.fx.ring(this.player.pos, 0xffe7a0, 3); this.event('visit_shrine', { key: it.key }); this.save(); this.ui.toast('Rested · progress saved', 'good'); };
+      const rest = () => { const m = (1 + this.skill('shrine_keeper') * 0.2) * (S.flags.oil ? 2 : 1); S.flags.oil = 0; S.hp = this.maxHp(); S.stamina = this.maxSt(); S.faith = Math.min(this.maxFaith(), S.faith + this.maxFaith() * 0.5 * m); S.respawn = it.key; S.flags.martyrUsed = false; this.player.doAnim('kneel', 1.6); this.fx.ring(this.player.pos, 0xffe7a0, 3); this.event('visit_shrine', { key: it.key }); this.save(); this.ui.toast('Rested · progress saved', 'good'); };
       const c = [{ t: 'Rest and save', f: rest }];
       if (this.has('candle') && !it.lit) c.push({ t: 'Light a candle', f: () => this.lightShrine(it) });
       c.push({ t: this.isNight ? 'Rest until dawn' : 'Rest until dusk', f: () => { rest(); if (this.isNight) { S.time = 0.27; S.day++; } else S.time = 0.8; this.ui.toast(this.isNight ? 'Night falls' : 'Dawn breaks'); } });
-      c.push({ t: 'Leave' }); this.ui.dialog(PLACES[it.key]?.label || 'Shrine', 'A small stone shrine with a weathered cross. You can rest here; it becomes the place you wake if you fall.', c);
+      c.push({ t: 'Leave' }); c.splice(c.length - 1, 0, { t: 'Pray before Our Lady', f: () => { this.player.doAnim('kneel', 2.0); S.faith = Math.min(this.maxFaith(), S.faith + 10); return { t: PRAYERS.hail_mary.name + '\n\n' + PRAYERS.hail_mary.text, c: [{ t: 'Amen.' }] }; } });
+      this.ui.dialog(PLACES[it.key]?.label || 'Wayside shrine', 'A granite wayside shrine of Our Lady, with candles and a kneeler. You may pray and rest here; it becomes the place you wake if you fall.', c);
     } else if (it.type === 'notice') this.openBoard();
     else if (it.type === 'bench') this.ui.openCraft('bench'); else if (it.type === 'campfire') this.ui.openCraft('campfire'); else if (it.type === 'forge') this.ui.openCraft('forge'); else if (it.type === 'church') this.ui.openCraft('church');
+    else if (it.type === 'font') { this.player.doAnim('pick', 0.8); S.faith = Math.min(this.maxFaith(), S.faith + 5); this.ui.toast('You dip your fingers in the holy water and make the Sign of the Cross. +5 faith', 'good'); }
+    else if (it.type === 'baptism') { this.player.doAnim('kneel', 2.0); this.ui.dialog('Baptismal font', PRAYERS.baptism.text, [{ t: 'Amen.', f: () => { S.faith = this.maxFaith(); this.ui.toast('You renew the promises of your Baptism. Faith restored.', 'good'); } }]); }
     else if (it.type === 'shop') this.ui.openShop(it.shop);
-    else if (it.type === 'cathedral') { this.player.doAnim('pray', 1.6); this.audio.choir(); this.audio.bell(5); S.faith = this.maxFaith(); if (this.mq()?.obj === 'pray_cathedral') this.event('pray_cathedral'); else this.ui.toast('You pray before the apostle. Faith restored.', 'good'); }
+    else if (it.type === 'cathedral') { this.player.doAnim('kneel', 2.0); this.audio.choir(); this.audio.bell(5); S.faith = this.maxFaith(); if (this.mq()?.obj === 'pray_cathedral') this.event('pray_cathedral'); else this.ui.toast('You pray before the apostle. Faith restored.', 'good'); }
     else if (it.type === 'chest') {
       if (S.opened[it.key]) { this.ui.toast('Empty'); return; } if (it.needsKey && !this.has(it.needsKey)) { this.ui.toast('Locked. It needs a key.'); return; }
       if (it.needsKey) this.take(it.needsKey, 1); S.opened[it.key] = 1; this.player.doAnim('chest', 1.2);
@@ -413,8 +428,10 @@ class Game {
     else if (it.type === 'votive') { if (S.coin < 1) { this.ui.toast('You have no coin to offer'); return; } const f = it.flames.find(i => this.interiors.flames.pos[i * 4 + 1] > 500); if (f == null) { this.ui.toast('Every candle is already burning'); return; } S.coin -= 1; this.interiors.flames.hide(f, false); S.faith = Math.min(this.maxFaith(), S.faith + 15); this.player.doAnim('pick', 0.8); this.ui.toast('You light a candle and offer a prayer. +15 faith', 'good'); this.event('votive', { room: this.inside?.id }); }
     else if (it.type === 'confess') {
       if (S.flags.confessDay === S.day) { this.ui.toast('You have been to confession today. Go in peace.'); return; }
-      this.ui.dialog('Priest (behind the grille)', 'In the name of the Father, and of the Son, and of the Holy Spirit. Speak freely, pilgrim — what weighs on your heart?', [
-        { t: 'Confess your sins with a contrite heart', f: () => { S.flags.confessDay = S.day; S.faith = this.maxFaith(); S.hp = this.maxHp(); this.audio.choir(); this.fx.ring(this.player.pos, 0xfff0c0, 2); this.ui.toast('Absolved — faith and health restored', 'gold'); return { t: 'Your sins are forgiven. For your penance, pray an Our Father at the altar. Go in peace.', c: [{ t: 'Thanks be to God.' }] }; } },
+      const absolve = () => { S.flags.confessDay = S.day; S.faith = this.maxFaith(); S.hp = this.maxHp(); this.audio.choir(); this.fx.ring(this.player.pos, 0xfff0c0, 2); this.ui.toast('Absolved: faith and health restored', 'gold');
+        return { t: 'God, the Father of mercies, through the death and resurrection of his Son has reconciled the world to himself and sent the Holy Spirit among us for the forgiveness of sins; through the ministry of the Church may God give you pardon and peace, and I absolve you from your sins in the name of the Father, and of the Son, + and of the Holy Spirit.', c: [{ t: 'Amen.', f: () => ({ t: 'Give thanks to the Lord, for he is good.', c: [{ t: 'His mercy endures for ever.', f: () => ({ t: 'The Lord has freed you from your sins. Go in peace.', c: [{ t: 'Thanks be to God.' }] }) }] }) }] }; };
+      this.ui.dialog('Priest (behind the grille)', PRAYERS.sign.text + '\nMay God, who has enlightened every heart, help you to know your sins and trust in his mercy.', [
+        { t: 'Bless me, Father, for I have sinned…', f: () => ({ t: '(You confess your sins with a contrite heart.)\n\nFor your penance, pray one Our Father and three Hail Marys. Now make your Act of Contrition.', c: [{ t: 'Pray the Act of Contrition', f: () => ({ t: PRAYERS.contrition.text, c: [{ t: 'Amen.', f: absolve }] }) }] }) },
         { t: 'Not today, Father.' }]);
     }
   }
@@ -474,18 +491,21 @@ class Game {
   updateCamera(dt) {
     const c = this.cam, P = this.player, cam = this.camera;
     if (P.lock && P.lock.alive && P.lock.pos.distanceTo(P.pos) < 26) { const want = Math.atan2(P.pos.x - P.lock.pos.x, P.pos.z - P.lock.pos.z); c.yaw += angDiff(c.yaw, want) * Math.min(1, dt * 5); c.pitch += (0.3 - c.pitch) * Math.min(1, dt * 2); } else if (P.lock) P.lock = null;
-    const rx = Math.cos(c.yaw), rz = -Math.sin(c.yaw); const sh = 0.42;
-    const tgt = new THREE.Vector3(P.pos.x + rx * sh, P.pos.y + 1.55, P.pos.z + rz * sh);
+    const ins = !!this.inside; const rx = Math.cos(c.yaw), rz = -Math.sin(c.yaw); const sh = ins ? 0.22 : 0.42;
+    const tgt = new THREE.Vector3(P.pos.x + rx * sh, P.pos.y + (ins ? 1.7 : 1.55), P.pos.z + rz * sh);
     if (!this.camTgt) this.camTgt = tgt.clone(); this.camTgt.lerp(tgt, Math.min(1, dt * 14));
-    const cp = Math.cos(c.pitch), sp = Math.sin(c.pitch); const dir = new THREE.Vector3(Math.sin(c.yaw) * cp, sp, Math.cos(c.yaw) * cp);
+    // indoors: sit a little higher and further back, and tilt down more when a wall is behind us, so the room and the player stay in view
+    let pitch = c.pitch; if (ins) pitch = Math.min(1.05, Math.max(pitch, this.inside.W > 12 ? 0.3 : 0.38) + (c.blockK || 0) * 0.4);
+    const cp = Math.cos(pitch), sp = Math.sin(pitch); const dir = new THREE.Vector3(Math.sin(c.yaw) * cp, sp, Math.cos(c.yaw) * cp);
     let d = c.dist; // collision march
-    for (let s = 0.4; s <= c.dist; s += 0.2) { const x = this.camTgt.x + dir.x * s, y = this.camTgt.y + dir.y * s, z = this.camTgt.z + dir.z * s; if (this.col.pointBlocked(x, y, z, 0.25) || y < this.groundAt(x, z) + 0.25 || (this.inside && y > this.inside.H - 0.4)) { d = Math.max(0.6, s - 0.25); break; } }
-    c.curD = c.curD == null ? d : (d < c.curD ? d : c.curD + (d - c.curD) * Math.min(1, dt * 3));
+    for (let s = 0.4; s <= c.dist; s += 0.2) { const x = this.camTgt.x + dir.x * s, y = this.camTgt.y + dir.y * s, z = this.camTgt.z + dir.z * s; if (this.col.pointBlocked(x, y, z, ins ? 0.38 : 0.25) || y < this.groundAt(x, z) + 0.25 || (ins && y > this.inside.H - 0.5)) { d = Math.max(0.6, s - (ins ? 0.35 : 0.25)); break; } }
+    if (ins) { c.blockK = (c.blockK || 0) + ((d < c.dist * 0.75 ? 1 - d / c.dist : 0) - (c.blockK || 0)) * Math.min(1, dt * 2.5); c.curD = c.curD == null ? d : c.curD + (d - c.curD) * Math.min(1, dt * (d < c.curD ? 14 : 2.5)); }
+    else { c.blockK = 0; c.curD = c.curD == null ? d : (d < c.curD ? d : c.curD + (d - c.curD) * Math.min(1, dt * 3)); }
     cam.position.copy(this.camTgt).addScaledVector(dir, c.curD); const gy = this.groundAt(cam.position.x, cam.position.z) + 0.3; if (cam.position.y < gy) cam.position.y = gy; if (this.inside && cam.position.y > this.inside.H - 0.3) cam.position.y = this.inside.H - 0.3;
     if (c.shakeT > 0) { c.shakeT = Math.max(0, c.shakeT - dt); const a = c.shakeT * 0.25; cam.position.x += (Math.random() - 0.5) * a; cam.position.y += (Math.random() - 0.5) * a; }
     // pace feedback: sprint widens the FOV a little and adds a subtle stride bob
     const spr = P.sprinting && P.speed > 4.5 ? 1 : 0; this._sprK = (this._sprK || 0) + (spr - (this._sprK || 0)) * Math.min(1, dt * (spr ? 3 : 4));
-    const fk = this._sprK * 7; if (Math.abs(fk - (this._fovK || 0)) > 0.02) { this._fovK = fk; cam.fov = this.baseFov + fk; cam.updateProjectionMatrix(); }
+    const fk = this._sprK * 7 + (ins ? 6 : 0); if (Math.abs(fk - (this._fovK || 0)) > 0.02) { this._fovK = fk; cam.fov = this.baseFov + fk; cam.updateProjectionMatrix(); }
     this._bobPh = (this._bobPh || 0) + dt * P.speed * 1.55; const bob = this._sprK * 0.055; const by = Math.abs(Math.sin(this._bobPh)) * bob, bx = Math.sin(this._bobPh) * bob * 0.5;
     cam.position.y += by; cam.position.x += rx * bx; cam.position.z += rz * bx;
     cam.lookAt(this.camTgt.x, this.camTgt.y + 0.05 + by * 0.6, this.camTgt.z);

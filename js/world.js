@@ -1,7 +1,8 @@
 import * as THREE from 'three';
-import { mergeGeometries } from '../vendor/addons/utils/BufferGeometryUtils.js?v=5';
-import { fbm, mulberry, distToPolyline, sstep, lerp, clamp, hash2 } from './util.js?v=5';
-import { CardLayer, cardMaterial, cross2, cross3, coverCell, planBoundaries, addTreeWind, bakeTreeImpostors, impostorMaterial, wind, T as FT } from './foliage.js?v=5';
+import { mergeGeometries } from '../vendor/addons/utils/BufferGeometryUtils.js?v=6';
+import { fbm, mulberry, distToPolyline, sstep, lerp, clamp, hash2 } from './util.js?v=6';
+import { cruceiro, statueMary } from './sacred.js?v=6';
+import { CardLayer, cardMaterial, cross2, cross3, coverCell, planBoundaries, addTreeWind, bakeTreeImpostors, impostorMaterial, wind, T as FT } from './foliage.js?v=6';
 
 export const WORLD = 600, HALF = 300, WATER = -0.55;
 // Camino route (x,z). North is -z.
@@ -30,13 +31,28 @@ function baseH(x, z) {
   return h;
 }
 for (const zn of ZONES) zoneH[zn.k] = Math.max(1.2, baseH(zn.x, zn.z));
-export function heightAt(x, z) {
+// Analytic terrain. Dry hollows away from the river are lifted above the water table
+// (v6: the Forest Shrine / Wolf Woods hollow used to sit below water level).
+export function rawHeight(x, z) {
   let h = baseH(x, z);
   const p = distToPolyline(x, z, PATH).d; h = lerp(h, Math.max(h * 0.6, 0.9), (1 - sstep(3, 12, p)) * 0.6);
   for (const zn of ZONES) { const d = Math.hypot(x - zn.x, z - zn.z); if (d < zn.r) h = lerp(h, zoneH[zn.k], 1 - sstep(zn.r * 0.62, zn.r, d)); }
   const r = distToPolyline(x, z, RIVER).d;
+  const floor = WATER + 1.25; if (h < floor) h = floor - (floor - h) * 0.06 - 0.02 * (1 - Math.exp(-(floor - h)));
   if (r < 16) h = lerp(h, Math.min(h, -2.0), 1 - sstep(5, 16, r));
   return h;
+}
+// Exact height of the RENDERED terrain mesh (same triangles as the PlaneGeometry), so every
+// placed object, actor and tree sits on the visible ground. Falls back to rawHeight before build.
+let TG = null;
+export function setTerrainGrid(g) { TG = g; }
+export function heightAt(x, z) {
+  if (!TG) return rawHeight(x, z);
+  const { seg, cs, h } = TG; const N = seg + 1;
+  let fx = (x + HALF) / cs, fz = (z + HALF) / cs; fx = fx < 0 ? 0 : fx > seg - 1e-6 ? seg - 1e-6 : fx; fz = fz < 0 ? 0 : fz > seg - 1e-6 ? seg - 1e-6 : fz;
+  const ix = fx | 0, iz = fz | 0, u = fx - ix, v = fz - iz;
+  const a = h[ix + N * iz], b = h[ix + N * (iz + 1)], c = h[ix + 1 + N * (iz + 1)], d = h[ix + 1 + N * iz];
+  return u + v <= 1 ? a + (d - a) * u + (b - a) * v : c + (b - c) * (1 - u) + (d - c) * (1 - v);
 }
 export function splatAt(x, z, h, slope) { // path, rock, cobble, forest
   const p = distToPolyline(x, z, PATH).d;
@@ -95,7 +111,8 @@ export function buildWorld(scene, A, Q, col, renderer) {
   const seg = Q.terrainSeg;
   const tg = new THREE.PlaneGeometry(WORLD, WORLD, seg, seg); tg.rotateX(-Math.PI / 2);
   const pos = tg.attributes.position; const n = pos.count; const spl = new Float32Array(n * 4); const uv = tg.attributes.uv;
-  for (let i = 0; i < n; i++) { const x = pos.getX(i), z = pos.getZ(i); pos.setY(i, heightAt(x, z)); uv.setXY(i, x / 4.5, z / 4.5); }
+  for (let i = 0; i < n; i++) { const x = pos.getX(i), z = pos.getZ(i); pos.setY(i, rawHeight(x, z)); uv.setXY(i, x / 4.5, z / 4.5); }
+  { const hh = new Float32Array(n); for (let i = 0; i < n; i++) hh[i] = pos.getY(i); setTerrainGrid({ seg, cs: WORLD / seg, h: hh }); }
   tg.computeVertexNormals();
   const nor = tg.attributes.normal;
   for (let i = 0; i < n; i++) { const s = splatAt(pos.getX(i), pos.getZ(i), pos.getY(i), 1 - nor.getY(i) * 1.0 + 0.0); spl.set(s, i * 4); }
@@ -111,6 +128,11 @@ export function buildWorld(scene, A, Q, col, renderer) {
       vec4 pth = texture2D(tPath, tuv*0.7); vec4 rk = mix(texture2D(tRock, tuv*0.5), texture2D(tRock, tuv*0.13), 0.4);
       vec4 cb = mix(texture2D(tCob, tuv*1.5), g, 0.12); vec4 fr = texture2D(tFor, tuv*0.6);
       float gs = clamp(1.0 - vSplat.x - vSplat.y - vSplat.z - vSplat.w, 0.0, 1.0);
+      { // v6: large-scale variation: bare-earth patches and greener / drier grass
+        float nA = texture2D(tFor, tuv * 0.037 + 0.13).g, nB = texture2D(tPath, tuv * 0.021 + 0.37).r;
+        g = mix(g, mix(pth, fr, 0.45), smoothstep(0.56, 0.7, nA) * 0.6);
+        g.rgb *= mix(vec3(0.9, 1.05, 0.86), vec3(1.1, 1.02, 0.84), smoothstep(0.32, 0.68, nB));
+      }
       vec4 sampledDiffuseColor = g*gs + pth*vSplat.x + rk*vSplat.y + cb*vSplat.z + fr*vSplat.w;
       diffuseColor *= sampledDiffuseColor;`);
   };
@@ -130,13 +152,22 @@ export function buildWorld(scene, A, Q, col, renderer) {
     updaters.push(dt => { wn.offset.y -= dt * 0.05; wn.offset.x += dt * 0.01; });
   }
 
+  // ---------- Placement helpers (v6) ----------
+  // footY: lowest visible-terrain height under a (rotated) footprint, so nothing overhangs a slope.
+  // placed: base of every static prop, checked by the automated ground-contact test.
+  const placed = [];
+  function footY(x, z, hw = 0, hd = hw, ry = 0) { let m = heightAt(x, z); if (hw <= 0 && hd <= 0) return m; const c = Math.cos(ry), sn = Math.sin(ry);
+    for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++) { const lx = (-1 + i / 2) * hw, lz = (-1 + j / 2) * hd; m = Math.min(m, heightAt(x + lx * c + lz * sn, z - lx * sn + lz * c)); } return m; }
+  function rec(k, x, z, y, hw = 0, hd = hw, ry = 0) { placed.push({ k, x, z, y, hw, hd, ry }); return y; }
+  function mergeGroup(g, mtx) { g.updateMatrixWorld(true); g.traverse(o => { if (o.isMesh) { const geo = o.geometry.clone(); geo.applyMatrix4(new THREE.Matrix4().multiplyMatrices(mtx, o.matrixWorld)); for (const k of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv'].includes(k)) geo.deleteAttribute(k); if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2)); if (!geo.index) geo.setIndex([...Array(geo.attributes.position.count).keys()]); B.addGeo(geo, o.material); } }); }
+
   // ---------- Buildings ----------
   const B = new Batch();
   const WALL = { plaster: ['Wall_Plaster_Straight', 'Wall_Plaster_Window_Wide_Round', 'Wall_Plaster_Door_Round', 'Wall_Plaster_WoodGrid'], brick: ['Wall_UnevenBrick_Straight', 'Wall_UnevenBrick_Window_Thin_Round', 'Wall_UnevenBrick_Door_Round', 'Wall_UnevenBrick_Window_Wide_Round'] };
   const ROOF = { '2x2': 'Roof_RoundTiles_4x4', '3x3': 'Roof_RoundTiles_6x6', '3x4': 'Roof_RoundTiles_6x8', '4x4': 'Roof_RoundTiles_8x8', '4x6': 'Roof_RoundTiles_8x12' };
   /** house: centre x,z; rot; wu,du wall units (2m); floors; style; door side front(+z local) */
   function house(x, z, rot, wu, du, floors = 1, style = 'plaster', opts = {}) {
-    const y0 = (opts.y ?? heightAt(x, z)) - 0.12; const W = wu * 2, D = du * 2;
+    const W = wu * 2, D = du * 2; const y0 = rec('house', x, z, (opts.y ?? footY(x, z, W / 2 + 0.2, D / 2 + 0.2, rot)) - 0.12, W / 2, D / 2, rot);
     const base = M4(x, y0, z, rot); const r = mulberry((x * 13 + z * 7) | 0);
     const sides = [[0, D / 2, 0, wu], [W / 2, 0, Math.PI / 2, du], [0, -D / 2, Math.PI, wu], [-W / 2, 0, -Math.PI / 2, du]];
     for (let f = 0; f < floors; f++) {
@@ -164,7 +195,7 @@ export function buildWorld(scene, A, Q, col, renderer) {
     return { x, z, rot, W, D, y0, door };
   }
   function tower(x, z, rot, floors, opts = {}) {
-    const y0 = (opts.y ?? heightAt(x, z)) - 0.12; const base = M4(x, y0, z, rot);
+    const y0 = rec('tower', x, z, (opts.y ?? footY(x, z, 2.2, 2.2, rot)) - 0.12, 2.1, 2.1, rot); const base = M4(x, y0, z, rot);
     for (let f = 0; f < floors; f++) {
       const top = f === floors - 1;
       [[0, 2, 0], [2, 0, Math.PI / 2], [0, -2, Math.PI], [-2, 0, -Math.PI / 2]].forEach(([sx, sz, sr]) => {
@@ -183,25 +214,36 @@ export function buildWorld(scene, A, Q, col, renderer) {
   }
   const stoneMat = new THREE.MeshStandardMaterial({ map: T.rock_d, normalMap: T.rock_n, roughness: 0.9, color: 0xc8c0b4 });
   const goldMat = new THREE.MeshStandardMaterial({ color: 0xc9a04a, metalness: 0.9, roughness: 0.3 });
+  const granite = new THREE.MeshStandardMaterial({ normalMap: T.rock_n, normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.88, color: 0x8e8a81 });
   const woodMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.85 });
   function boxGeo(w, h, d, x, y, z, ry = 0) { const g = new THREE.BoxGeometry(w, h, d); g.applyMatrix4(M4(x, y, z, ry)); return g; }
   function cross(x, y, z, s, ry = 0, mat = goldMat) { B.addGeo(boxGeo(0.14 * s, 1.6 * s, 0.14 * s, x, y + 0.8 * s, z, ry), mat); B.addGeo(boxGeo(0.9 * s, 0.14 * s, 0.14 * s, x, y + 1.1 * s, z, ry), mat); }
-  function waysideCross(x, z) { const y = heightAt(x, z); B.addGeo(boxGeo(1.0, 0.5, 1.0, x, y + 0.2, z), stoneMat); B.addGeo(boxGeo(0.3, 2.6, 0.3, x, y + 1.6, z), stoneMat); B.addGeo(boxGeo(1.3, 0.28, 0.28, x, y + 2.3, z), stoneMat); col.addCircle(x, z, 0.65, y + 3); }
+  function waysideCross(x, z, ry = 0, h = 1) { const y = rec('cruceiro', x, z, footY(x, z, 0.95, 0.95, ry) - 0.05, 0.95, 0.95, ry); const g = cruceiro(granite, h); mergeGroup(g, M4(x, y, z, ry)); col.addBox(x, z, 0.95, 0.95, ry, y + g.userData.top); }
   // Camino bollard with scallop tile
   const shellTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); g.fillStyle = '#1d4f9c'; g.fillRect(0, 0, 128, 128); g.strokeStyle = '#f2c20f'; g.lineWidth = 7; g.lineCap = 'round'; for (let i = 0; i < 9; i++) { const a = Math.PI * (0.12 + i * 0.095); g.beginPath(); g.moveTo(28, 64); g.lineTo(28 + Math.cos(a - Math.PI / 2) * 0 + Math.sin(a) * 80, 64 - Math.cos(a) * 80 * 0.9); g.stroke(); } const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
   const shellMat = new THREE.MeshStandardMaterial({ map: shellTex, roughness: 0.5 });
   const concrete = new THREE.MeshStandardMaterial({ color: 0xd8d2c6, roughness: 0.95, map: T.rock_d });
-  function marker(x, z, ry) { const y = heightAt(x, z); B.addGeo(boxGeo(0.45, 1.1, 0.3, x, y + 0.55, z, ry), concrete); B.addGeo(boxGeo(0.38, 0.38, 0.02, 0, 0, 0).applyMatrix4(M4(x + Math.sin(ry) * 0.16, y + 0.86, z + Math.cos(ry) * 0.16, ry)), shellMat); col.addCircle(x, z, 0.35, y + 1.2); }
-  function shrine(key, x, z) {
-    const y = heightAt(x, z); B.addGeo(boxGeo(2.2, 0.35, 1.6, x, y + 0.15, z), stoneMat); B.addGeo(boxGeo(0.7, 1.1, 0.5, x, y + 0.85, z - 0.4), stoneMat); cross(x, y + 1.35, z - 0.4, 0.8, 0, stoneMat);
-    const flame = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffc070 })); flame.position.set(x + 0.45, y + 0.62, z + 0.1); flame.visible = false; group.add(flame);
-    const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.25, 8), new THREE.MeshStandardMaterial({ color: 0xf2eee0 })); candle.position.set(x + 0.45, y + 0.45, z + 0.1); group.add(candle);
-    col.addBox(x, z, 1.1, 0.8, 0, y + 2); interactives.push({ type: 'shrine', key, x, z: z + 1.3, r: 2.6, label: 'Shrine — rest & save', flame }); lamps.push({ x: x + 0.45, y: y + 0.7, z: z + 0.1, flame, always: false });
+  function marker(x, z, ry) { const y = rec('marker', x, z, footY(x, z, 0.25, 0.18, ry), 0.22, 0.15, ry); B.addGeo(boxGeo(0.45, 1.1, 0.3, x, y + 0.55, z, ry), concrete); B.addGeo(boxGeo(0.38, 0.38, 0.02, 0, 0, 0).applyMatrix4(M4(x + Math.sin(ry) * 0.16, y + 0.86, z + Math.cos(ry) * 0.16, ry)), shellMat); col.addCircle(x, z, 0.35, y + 1.2); }
+  function shrine(key, x, z) { // Galician wayside shrine: granite niche with Our Lady, candles, kneeler
+    const y = rec('shrine', x, z, footY(x, z, 1.1, 0.8) - 0.03, 1.1, 0.8); B.addGeo(boxGeo(2.2, 0.38, 1.6, x, y + 0.16, z), granite);
+    const nz = z - 0.42, ny = y + 0.35; // niche box, open to +z
+    B.addGeo(boxGeo(1.1, 0.5, 0.72, x, ny + 0.25, nz), granite); // altar ledge
+    B.addGeo(boxGeo(1.1, 1.25, 0.1, x, ny + 0.5 + 0.625, nz - 0.31), granite); for (const sx of [-1, 1]) B.addGeo(boxGeo(0.12, 1.25, 0.72, x + sx * 0.49, ny + 0.5 + 0.625, nz), granite);
+    for (const sx of [-1, 1]) { const r = new THREE.BoxGeometry(0.72, 0.1, 0.92); r.rotateZ(-sx * 0.55); r.translate(x + sx * 0.29, ny + 1.9, nz); B.addGeo(r, granite); }
+    cross(x, ny + 2.05, nz + 0.2, 0.42, 0, granite);
+    const mary = statueMary(); mary.scale.setScalar(0.8); mergeGroup(mary, M4(x, ny + 0.5, nz - 0.05));
+    B.addGeo(boxGeo(0.9, 0.035, 0.08, x, ny + 0.5, nz + 0.34), woodMat);
+    const flame = new THREE.Group(); const fm = new THREE.MeshBasicMaterial({ color: 0xffc070 });
+    for (const sx of [-0.3, 0.3]) { B.addGeo(boxGeo(0.06, 0.2, 0.06, x + sx, ny + 0.5, nz + 0.22), new THREE.MeshStandardMaterial({ color: 0xf2eee0 })); const f = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), fm); f.scale.y = 1.6; f.position.set(x + sx, ny + 0.75, nz + 0.22); flame.add(f); }
+    flame.visible = false; group.add(flame);
+    // wooden kneeler in front of the niche
+    B.addGeo(boxGeo(0.9, 0.1, 0.28, x, y + 0.4, z + 0.42), woodMat); for (const sx of [-0.4, 0.4]) B.addGeo(boxGeo(0.07, 0.47, 0.07, x + sx, y + 0.585, z + 0.2), woodMat); B.addGeo(boxGeo(0.95, 0.06, 0.18, x, y + 0.84, z + 0.2), woodMat);
+    col.addBox(x, z, 1.1, 0.8, 0, y + 2.4); interactives.push({ type: 'shrine', key, x, z: z + 1.3, r: 2.6, label: 'Wayside shrine of Our Lady — pray, rest & save', flame }); lamps.push({ x, y: ny + 0.8, z: nz + 0.25, flame, always: false });
   }
-  function lamp(x, z) { const y = heightAt(x, z); B.addGeo(boxGeo(0.14, 2.6, 0.14, x, y + 1.3, z), woodMat); B.addGeo(boxGeo(0.6, 0.1, 0.1, x + 0.25, y + 2.55, z), woodMat);
+  function lamp(x, z) { const y = rec('lamp', x, z, footY(x, z, 0.1)); B.addGeo(boxGeo(0.14, 2.6, 0.14, x, y + 1.3, z), woodMat); B.addGeo(boxGeo(0.6, 0.1, 0.1, x + 0.25, y + 2.55, z), woodMat);
     const g = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.3, 0.22), new THREE.MeshStandardMaterial({ color: 0x332211, emissive: 0xffa040, emissiveIntensity: 0.2 })); g.position.set(x + 0.48, y + 2.3, z); group.add(g); lamps.push({ x: x + 0.48, y: y + 2.3, z, mesh: g, always: true }); col.addCircle(x, z, 0.25, y + 3); }
   function stall(x, z, ry, color, key, label) {
-    const y = heightAt(x, z); const m = M4(x, y, z, ry);
+    const y = rec('stall', x, z, footY(x, z, 1.45, 0.85, ry), 1.45, 0.85, ry); const m = M4(x, y, z, ry);
     for (const [px, pz] of [[-1.4, -0.8], [1.4, -0.8], [-1.4, 0.8], [1.4, 0.8]]) B.addGeo(boxGeo(0.1, 2.4, 0.1, px, 1.2, pz).applyMatrix4(m), woodMat);
     B.addGeo(boxGeo(3, 0.12, 1.4, 0, 0.9, 0.2).applyMatrix4(m), woodMat);
     const cl = new THREE.MeshStandardMaterial({ color, roughness: 0.9, side: THREE.DoubleSide }); const cg = new THREE.PlaneGeometry(3.3, 2.0); cg.rotateX(-Math.PI / 2 + 0.25); cg.translate(0, 2.4, 0); B.addGeo(cg.applyMatrix4(m), cl);
@@ -210,7 +252,7 @@ export function buildWorld(scene, A, Q, col, renderer) {
     const front = new THREE.Vector3(0, 0, 2.0).applyAxisAngle(new THREE.Vector3(0, 1, 0), ry);
     return { x: x + front.x, z: z + front.z, npcX: x - front.x * 0.4, npcZ: z - front.z * 0.4, ry };
   }
-  function tent(x, z, ry, color = 0x6b5a44) { const y = heightAt(x, z); const g = new THREE.ConeGeometry(2.4, 2.8, 4, 1, true); g.rotateY(Math.PI / 4); g.applyMatrix4(M4(x, y + 1.4, z, ry)); B.addGeo(g, new THREE.MeshStandardMaterial({ color, roughness: 1, side: THREE.DoubleSide, map: T.forest_d })); col.addCircle(x, z, 1.8, y + 3); }
+  function tent(x, z, ry, color = 0x6b5a44) { const y = rec('tent', x, z, footY(x, z, 1.7, 1.7, ry) - 0.05, 1.6, 1.6, ry); const g = new THREE.ConeGeometry(2.4, 2.8, 4, 1, true); g.rotateY(Math.PI / 4); g.applyMatrix4(M4(x, y + 1.4, z, ry)); B.addGeo(g, new THREE.MeshStandardMaterial({ color, roughness: 1, side: THREE.DoubleSide, map: T.forest_d })); col.addCircle(x, z, 1.8, y + 3); }
 
   // San Roque (start)
   house(-222, 168, 0.1, 3, 3, 1, 'plaster', { enter: { id: 'house_sr1', kind: 'house', name: "Marta's cottage" } }); house(-180, 162, -0.15, 3, 4, 2, 'brick', { upper: 'plaster' }); house(-226, 206, Math.PI - 0.1, 3, 3, 1, 'plaster');
@@ -218,21 +260,21 @@ export function buildWorld(scene, A, Q, col, renderer) {
   shrine('shrine_start', -186, 176);
   lamp(-196, 184); lamp(-205, 200);
   // Notice board
-  { const [x, z] = [-207, 175]; const y = heightAt(x, z); B.addGeo(boxGeo(0.15, 2.4, 0.15, x - 0.9, y + 1.2, z), woodMat); B.addGeo(boxGeo(0.15, 2.4, 0.15, x + 0.9, y + 1.2, z), woodMat); B.addGeo(boxGeo(2.1, 1.2, 0.08, x, y + 1.6, z), new THREE.MeshStandardMaterial({ color: 0x8a6a46, map: T.forest_d }));
+  { const [x, z] = [-207, 175]; const y = rec('notice', x, z, footY(x, z, 0.95, 0.1)); B.addGeo(boxGeo(0.15, 2.4, 0.15, x - 0.9, y + 1.2, z), woodMat); B.addGeo(boxGeo(0.15, 2.4, 0.15, x + 0.9, y + 1.2, z), woodMat); B.addGeo(boxGeo(2.1, 1.2, 0.08, x, y + 1.6, z), new THREE.MeshStandardMaterial({ color: 0x8a6a46, map: T.forest_d }));
     for (let i = 0; i < 5; i++) B.addGeo(boxGeo(0.35, 0.45, 0.02, x - 0.7 + i * 0.35, y + 1.6 + (i % 2) * 0.15, z + 0.06), new THREE.MeshStandardMaterial({ color: 0xe8dcc0 }));
     col.addBox(x, z, 1.1, 0.25, 0, y + 3); interactives.push({ type: 'notice', x, z: z + 1.3, r: 2.4, label: 'Notice board — bounties' }); }
   // Workbench + campfire
-  { const [x, z] = [-216, 186]; const y = heightAt(x, z); B.addGeo(boxGeo(2.0, 0.12, 0.9, x, y + 0.85, z), woodMat); for (const [a, b] of [[-0.85, -0.35], [0.85, -0.35], [-0.85, 0.35], [0.85, 0.35]]) B.addGeo(boxGeo(0.1, 0.85, 0.1, x + a, y + 0.42, z + b), woodMat);
+  { const [x, z] = [-216, 186]; const y = rec('bench', x, z, footY(x, z, 0.9, 0.4)); B.addGeo(boxGeo(2.0, 0.12, 0.9, x, y + 0.85, z), woodMat); for (const [a, b] of [[-0.85, -0.35], [0.85, -0.35], [-0.85, 0.35], [0.85, 0.35]]) B.addGeo(boxGeo(0.1, 0.85, 0.1, x + a, y + 0.42, z + b), woodMat);
     col.addBox(x, z, 1.05, 0.5, 0, y + 1.2); interactives.push({ type: 'bench', x, z: z + 1.2, r: 2.2, label: 'Workbench — craft' }); }
-  function campfire(x, z, key) { const y = heightAt(x, z); for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; B.addGeo(boxGeo(0.3, 0.2, 0.25, x + Math.cos(a) * 0.6, y + 0.1, z + Math.sin(a) * 0.6, a), stoneMat); }
+  function campfire(x, z, key) { const y = rec('campfire', x, z, footY(x, z, 0.7) - 0.02, 0.5); for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; B.addGeo(boxGeo(0.3, 0.2, 0.25, x + Math.cos(a) * 0.6, y + 0.1, z + Math.sin(a) * 0.6, a), stoneMat); }
     for (let i = 0; i < 3; i++) B.addGeo(boxGeo(0.12, 0.12, 1.0, x, y + 0.15, z, i * 1.05), woodMat);
     const fire = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.8, 7), new THREE.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0.85 })); fire.position.set(x, y + 0.5, z); group.add(fire);
     updaters.push((dt, t) => { fire.scale.set(1 + Math.sin(t * 13) * 0.08, 1 + Math.sin(t * 9 + 1) * 0.15, 1); });
     lamps.push({ x, y: y + 0.8, z, fire, always: true, strong: true }); col.addCircle(x, z, 0.8, y + 1); if (key) interactives.push({ type: 'campfire', x, z, r: 2.4, label: 'Campfire — cook' }); }
   campfire(-211, 192, 'cf1');
   // farm with fences
-  for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; const x = -246 + Math.cos(a) * 14, z = 140 + Math.sin(a) * 10; B.add(kit['Prop_WoodenFence_Single'], M4(x, heightAt(x, z), z, -a + Math.PI / 2, 1.3)); }
-  B.add(kit['Prop_Wagon'], M4(-232, heightAt(-232, 158), 158, 0.6)); col.addBox(-232, 158, 1.1, 2.2, 0.6, 5);
+  for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; const x = -246 + Math.cos(a) * 14, z = 140 + Math.sin(a) * 10; B.add(kit['Prop_WoodenFence_Single'], M4(x, rec('fence', x, z, footY(x, z, 1.2, 0.1, -a + Math.PI / 2) - 0.03), z, -a + Math.PI / 2, 1.3)); }
+  B.add(kit['Prop_Wagon'], M4(-232, rec('wagon', -232, 158, footY(-232, 158, 1.0, 2.0, 0.6)), 158, 0.6)); col.addBox(-232, 158, 1.1, 2.2, 0.6, 5);
 
   // River shrine & bridge
   shrine('shrine_river', -114, 106);
@@ -258,23 +300,23 @@ export function buildWorld(scene, A, Q, col, renderer) {
   const cat = { x: 212, z: -224, ry: 0.0 };
   const nave = house(cat.x, cat.z - 4, cat.ry, 4, 6, 3, 'brick', { solid: true, noChimney: true, upper: 'brick', enter: { id: 'cathedral', kind: 'cathedral', name: 'the Cathedral' } });
   house(cat.x, cat.z - 16, cat.ry, 4, 6, 3, 'brick', { solid: true, noChimney: true, upper: 'brick', y: nave.y0 + 0.12 });
+  { const low = footY(cat.x, cat.z - 10, 4.3, 12.3); if (low < nave.y0) { const h = nave.y0 + 0.1 - (low - 0.15); B.addGeo(boxGeo(8.5, h, 24.5, cat.x, low - 0.15 + h / 2, cat.z - 10), stoneMat); for (const p of placed) if (p.k === 'house' && Math.abs(p.x - cat.x) < 0.1 && Math.abs(p.z - (cat.z - 16)) < 0.1) p.y = low - 0.15; rec('cathedral-plinth', cat.x, cat.z - 10, low - 0.15, 4.25, 12.25); } }
   tower(cat.x - 6.4, cat.z + 3.6, 0, 6, { y: nave.y0 + 0.12 }); const bell2 = tower(cat.x + 6.4, cat.z + 3.6, 0, 6, { y: nave.y0 + 0.12 });
   cross(cat.x, nave.y0 + 9 + 5.5, cat.z - 4, 1.4);
   const townHouses = [[168, -206, 0.2, 3, 4, 2], [170, -186, 1.57, 3, 3, 2], [178, -232, 0.1, 3, 3, 2], [240, -200, -1.57, 3, 4, 2], [238, -178, -1.4, 3, 3, 2], [224, -160, 3.0, 4, 4, 2], [196, -150, 3.1, 3, 4, 2], [244, -228, -1.2, 3, 3, 1], [160, -168, 1.3, 2, 3, 1], [180, -148, 2.8, 3, 3, 2]];
   const ENTER = { '170,-186': { id: 'house_st', kind: 'house', name: 'the townhouse' }, '224,-160': { id: 'inn_st', kind: 'inn', name: 'the Posada del Camino' }, '196,-150': { id: 'shop_st', kind: 'shop', name: 'the general store' } };
   for (const h of townHouses) house(h[0], h[1], h[2], h[3], h[4], h[5], hash2(h[0] | 0, h[1] | 0) > 0.5 ? 'plaster' : 'brick', { upper: 'plaster', enter: ENTER[h[0] + ',' + h[1]] });
   // Praza: fountain, stone cruceiro, benches
-  { const fx = 200, fz = -196, fy = heightAt(fx, fz); const lathe = (pts, seg = 20) => new THREE.LatheGeometry(pts.map(p => new THREE.Vector2(p[0], p[1])), seg);
+  { const fx = 200, fz = -196, fy = rec('fountain', fx, fz, footY(fx, fz, 2.0, 2.0) + 0.04, 1.4); const lathe = (pts, seg = 20) => new THREE.LatheGeometry(pts.map(p => new THREE.Vector2(p[0], p[1])), seg);
     const basin = lathe([[0, 0], [1.9, 0], [2.0, 0.1], [2.0, 0.62], [1.78, 0.62], [1.78, 0.25], [0, 0.25]], 28); basin.translate(fx, fy - 0.05, fz); B.addGeo(basin, stoneMat);
     const col1 = lathe([[0, 0], [0.32, 0], [0.22, 0.3], [0.18, 1.2], [0.7, 1.35], [0.72, 1.5], [0.12, 1.55], [0.1, 2.1], [0.2, 2.2], [0, 2.35]], 16); col1.translate(fx, fy, fz); B.addGeo(col1, stoneMat);
     const wmat = new THREE.MeshStandardMaterial({ color: 0x3a6070, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.8 }); const wd = new THREE.Mesh(new THREE.CircleGeometry(1.78, 28), wmat); wd.rotation.x = -Math.PI / 2; wd.position.set(fx, fy + 0.5, fz); group.add(wd);
     const sp = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.6, 1.0, 12, 1, true), new THREE.MeshBasicMaterial({ color: 0xcfe6f0, transparent: true, opacity: 0.35, depthWrite: false })); sp.position.set(fx, fy + 1.0, fz); group.add(sp); updaters.push((dt, t) => { sp.material.opacity = 0.28 + Math.sin(t * 9) * 0.06; sp.rotation.y = t; });
     col.addCircle(fx, fz, 2.05, fy + 1); fountainPos = { x: fx, z: fz };
-    // cruceiro
-    const cx2 = 222, cz2 = -204, cy = heightAt(cx2, cz2); B.addGeo(boxGeo(2.2, 0.3, 2.2, cx2, cy + 0.1, cz2), stoneMat); B.addGeo(boxGeo(1.6, 0.3, 1.6, cx2, cy + 0.4, cz2), stoneMat); B.addGeo(boxGeo(1.0, 0.3, 1.0, cx2, cy + 0.7, cz2), stoneMat);
-    const shaft = new THREE.CylinderGeometry(0.16, 0.2, 3.6, 8); shaft.translate(cx2, cy + 2.6, cz2); B.addGeo(shaft, stoneMat); B.addGeo(boxGeo(0.4, 0.25, 0.4, cx2, cy + 4.5, cz2), stoneMat); cross(cx2, cy + 4.6, cz2, 0.75, 0, stoneMat); col.addBox(cx2, cz2, 1.1, 1.1, 0, cy + 5);
+    // Galician cruceiro on its stepped platform, Christ facing the cathedral square
+    waysideCross(222, -204, Math.PI * 0.75, 1.3);
     // benches round the square
-    for (const [bx, bz, br] of [[194, -202, 0.8], [206, -190, 3.6], [193, -190, 2.3], [208, -201, -0.8], [216, -196, 1.57], [186, -196, 1.57]]) { const by = heightAt(bx, bz); const m = M4(bx, by, bz, br); B.addGeo(boxGeo(2.0, 0.1, 0.5, 0, 0.46, 0).applyMatrix4(m), woodMat); B.addGeo(boxGeo(2.0, 0.45, 0.08, 0, 0.78, -0.24).applyMatrix4(m), woodMat); for (const sx of [-0.85, 0.85]) B.addGeo(boxGeo(0.12, 0.46, 0.45, sx, 0.23, 0).applyMatrix4(m), stoneMat); col.addBox(bx, bz, 1.0, 0.3, br, by + 0.6); benches.push({ x: bx, z: bz, ry: br, y: by }); }
+    for (const [bx, bz, br] of [[194, -202, 0.8], [206, -190, 3.6], [193, -190, 2.3], [208, -201, -0.8], [216, -196, 1.57], [186, -196, 1.57]]) { const by = rec('pbench', bx, bz, footY(bx, bz, 1.0, 0.25, br), 0.9, 0.2, br); const m = M4(bx, by, bz, br); B.addGeo(boxGeo(2.0, 0.1, 0.5, 0, 0.46, 0).applyMatrix4(m), woodMat); B.addGeo(boxGeo(2.0, 0.45, 0.08, 0, 0.78, -0.24).applyMatrix4(m), woodMat); for (const sx of [-0.85, 0.85]) B.addGeo(boxGeo(0.12, 0.46, 0.45, sx, 0.23, 0).applyMatrix4(m), stoneMat); col.addBox(bx, bz, 1.0, 0.3, br, by + 0.6); benches.push({ x: bx, z: bz, ry: br, y: by }); }
   }
   const smith = house(222, -182, -1.57, 3, 3, 1, 'brick'); campfire(216, -186, null);
   const stalls = { merchant: stall(186, -184, 0.3, 0x8a2e2a), apothecary: stall(196, -172, 2.8, 0x2e5a3a), tailor: stall(180, -198, 1.3, 0x3a3f7a), church: stall(200, -205, 0.1, 0xc9b88a) };
@@ -283,15 +325,15 @@ export function buildWorld(scene, A, Q, col, renderer) {
   interactives.push({ type: 'forge', x: 216, z: -189, r: 2.2, label: 'Forge — smelt' });
   interactives.push({ type: 'church', x: 205, z: -206, r: 2.2, label: 'Holy water font' });
   shrine('shrine_town', 170, -158); lamp(190, -190); lamp(205, -180); lamp(184, -166); lamp(210, -200);
-  B.add(kit['Prop_Wagon'], M4(226, heightAt(226, -195), -195, 1.2)); col.addBox(226, -195, 1.1, 2.2, 1.2, 5);
+  B.add(kit['Prop_Wagon'], M4(226, rec('wagon', 226, -195, footY(226, -195, 1.0, 2.0, 1.2)), -195, 1.2)); col.addBox(226, -195, 1.1, 2.2, 1.2, 5);
 
   // Bandit camp
   for (const [x, z, r] of [[-218, -96, 0.3], [-204, -100, 1.2], [-214, -82, 2.4], [-200, -86, 0.8]]) tent(x, z, r, 0x5a4a38);
   campfire(-210, -91, 'camp');
-  for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2; if (a > 0.2 && a < 0.75) continue; const x = -211 + Math.cos(a) * 19, z = -91 + Math.sin(a) * 19; B.add(kit['Prop_WoodenFence_Single'], M4(x, heightAt(x, z), z, -a + Math.PI / 2, 1.6)); col.addBox(x, z, 1.6, 0.2, -a + Math.PI / 2, heightAt(x, z) + 1.4); }
+  for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2; if (a > 0.2 && a < 0.75) continue; const x = -211 + Math.cos(a) * 19, z = -91 + Math.sin(a) * 19; B.add(kit['Prop_WoodenFence_Single'], M4(x, rec('fence', x, z, footY(x, z, 1.5, 0.1, -a + Math.PI / 2) - 0.03), z, -a + Math.PI / 2, 1.6)); col.addBox(x, z, 1.6, 0.2, -a + Math.PI / 2, heightAt(x, z) + 1.4); }
   interactives.push({ type: 'chest', key: 'bandit_chest', x: -206, z: -96, r: 2, label: 'Bandit chest', loot: ['iron_ingot', 'cloth', 'coin'] });
   // Ruined chapel (roofless brick)
-  { const x = -40, z = -172; const y0 = heightAt(x, z) - 0.12; const base = M4(x, y0, z, 0.3); const r = mulberry(77);
+  { const x = -40, z = -172; const y0 = rec('chapel', x, z, footY(x, z, 4.2, 6.2, 0.3) - 0.12, 4, 6, 0.3); const base = M4(x, y0, z, 0.3); const r = mulberry(77);
     const W = 8, D = 12; const sides = [[0, D / 2, 0, 4], [W / 2, 0, Math.PI / 2, 6], [0, -D / 2, Math.PI, 4], [-W / 2, 0, -Math.PI / 2, 6]];
     sides.forEach(([sx, sz, sr, cnt], si) => { for (let i = 0; i < cnt; i++) { if (r() < 0.22 && !(si === 0)) continue; const off = -cnt + 1 + i * 2; const lx = sx + Math.cos(sr) * off, lz = sz - Math.sin(sr) * off; const p = si === 0 && i === 1 ? 'Wall_UnevenBrick_Door_Round' : (si === 0 && i === 2 ? 'Wall_UnevenBrick_Door_Round' : 'Wall_UnevenBrick_Window_Thin_Round'); B.add(kit[p], base.clone().multiply(M4(lx, 0, lz, sr + Math.PI))); if (r() < 0.4) B.add(kit['Wall_UnevenBrick_Straight'], base.clone().multiply(M4(lx, 3, lz, sr + Math.PI))); } });
     // walls as colliders (thin boxes), leaving door gap on front
@@ -299,45 +341,48 @@ export function buildWorld(scene, A, Q, col, renderer) {
     let [ax, az] = P(0, -D / 2); col.addBox(ax, az, W / 2, 0.3, 0.3, y0 + 4); [ax, az] = P(W / 2, 0); col.addBox(ax, az, 0.3, D / 2, 0.3, y0 + 4); [ax, az] = P(-W / 2, 0); col.addBox(ax, az, 0.3, D / 2, 0.3, y0 + 4);
     [ax, az] = P(-3, D / 2); col.addBox(ax, az, 1, 0.3, 0.3, y0 + 4); [ax, az] = P(3, D / 2); col.addBox(ax, az, 1, 0.3, 0.3, y0 + 4);
     B.addGeo(boxGeo(1.6, 1.0, 0.8, 0, 0.5, -4.6).applyMatrix4(base), stoneMat);
-    const [kx, kz] = P(0, -3.4); interactives.push({ type: 'chest', key: 'chapel_chest', x: kx, z: kz, r: 2, label: 'Reliquary chest', needsKey: 'chapel_key', loot: ['blessed_hat', 'silver_rosary', 'relic_fragment', 'coin'] });
+    const [kx, kz] = P(0, -3.4); interactives.push({ type: 'chest', key: 'chapel_chest', x: kx, z: kz, r: 2, label: 'Old chapel chest', needsKey: 'chapel_key', loot: ['blessed_hat', 'silver_rosary', 'relic_fragment', 'coin'] });
     const [ex, ez] = P(5, 9); nodes.push({ type: 'chapel_key', x: ex, z: ez, once: true });
   }
   // Region 2 sign (east edge) — informational only
-  { const x = 286, z = -212, y = heightAt(x, z); B.addGeo(boxGeo(0.2, 3, 0.2, x, y + 1.5, z), woodMat); B.addGeo(boxGeo(0.12, 1.0, 2.6, x + 0.1, y + 2.6, z), woodMat); col.addCircle(x, z, 0.4, y + 3);
+  { const x = 286, z = -212, y = rec('sign', x, z, footY(x, z, 0.15)); B.addGeo(boxGeo(0.2, 3, 0.2, x, y + 1.5, z), woodMat); B.addGeo(boxGeo(0.12, 1.0, 2.6, x + 0.1, y + 2.6, z), woodMat); col.addCircle(x, z, 0.4, y + 3);
     interactives.push({ type: 'sign', x: x - 1.5, z, r: 3, label: 'Signpost', text: 'Region 2: coming soon' }); }
   // Wayside crosses & scallop markers along the Camino
   { let acc = 0, mk = 0; for (let i = 0; i < PATH.length - 1; i++) { const [ax, az] = PATH[i], [bx, bz] = PATH[i + 1]; const L = Math.hypot(bx - ax, bz - az); const ry = Math.atan2(bx - ax, bz - az);
     for (let s = 0; s < L; s += 2) { acc += 2; const x = lerp(ax, bx, s / L), z = lerp(az, bz, s / L); const nx = Math.cos(ry), nz = -Math.sin(ry);
-      if (acc - mk > 38) { mk = acc; const busy = [...ZONES].some(zn => Math.hypot(x - zn.x, z - zn.z) < zn.r * 0.7) || distToPolyline(x, z, RIVER).d < 18; if (!busy) { if ((mk / 38 | 0) % 4 === 0) waysideCross(x + nx * 4, z + nz * 4); else marker(x + nx * 3, z + nz * 3, ry + Math.PI / 2); } } } } }
+      if (acc - mk > 38) { mk = acc; const busy = [...ZONES].some(zn => Math.hypot(x - zn.x, z - zn.z) < zn.r * 0.7) || distToPolyline(x, z, RIVER).d < 18; if (!busy) { if ((mk / 38 | 0) % 4 === 0) waysideCross(x + nx * 4.5, z + nz * 4.5, Math.atan2(-nx, -nz)); else marker(x + nx * 3, z + nz * 3, ry + Math.PI / 2); } } } } }
   B.build(group);
 
   // ---------- Vegetation ----------
   const treeTypes = Q.level === 0 ? ['Pine_1', 'CommonTree_3', 'Pine_2'] : ['Pine_1', 'Pine_2', 'Pine_3', 'CommonTree_1', 'CommonTree_2', 'CommonTree_3'];
   const trees = []; // {x,z,y,t,s,r}
+  const NEAR_CAP = [150, 220, 300][Q.level];
   function okSpot(x, z, clear = 6) { if (Math.abs(x) > 280 || Math.abs(z) > 280) return false; if (distToPolyline(x, z, PATH).d < clear) return false; if (distToPolyline(x, z, RIVER).d < 13) return false; for (const zn of ZONES) if (Math.hypot(x - zn.x, z - zn.z) < zn.r * 0.85) return false; if (col.pointBlocked(x, 0, z, 2.5)) return false; return true; }
   const nTrees = Q.trees;
   for (let i = 0; i < nTrees * 4 && trees.length < nTrees; i++) {
     const inWood = i % 3 !== 0; let x, z;
     if (inWood) { const a = rng() * Math.PI * 2, d = Math.sqrt(rng()) * 105; x = -60 + Math.cos(a) * d; z = -115 + Math.sin(a) * d; } else { x = (rng() - 0.5) * 560; z = (rng() - 0.5) * 560; if (rng() < 0.5 && fbm(x * 0.01, z * 0.01) < 0.5) continue; }
-    if (!okSpot(x, z)) continue; const y = heightAt(x, z); if (y < WATER + 0.5) continue;
+    if (!okSpot(x, z)) continue; const y = footY(x, z, 0.45, 0.45); if (y < WATER + 0.5) continue;
     const t = inWood && rng() < 0.7 ? Math.floor(rng() * 3) : Math.floor(rng() * treeTypes.length);
     trees.push({ x, z, y, t: t % treeTypes.length, s: 0.8 + rng() * 0.55, r: rng() * 6.28 });
   }
   for (const tr of trees) col.addCircle(tr.x, tr.z, 0.45 * tr.s, tr.y + 6, 'tree');
   // near: real models (instanced, rebuilt as player moves, swaying in the wind); far: baked billboard impostors
-  const nearMeshes = treeTypes.map(name => nat[name].map(p => { const m = new THREE.InstancedMesh(p.geo, addTreeWind(p.mat, /Pine/.test(name) ? 0.6 : 1), 160); m.castShadow = true; m.receiveShadow = false; m.count = 0; m.frustumCulled = false; group.add(m); return m; }));
+  const nearMeshes = treeTypes.map(name => nat[name].map(p => { const m = new THREE.InstancedMesh(p.geo, addTreeWind(p.mat, /Pine/.test(name) ? 0.6 : 1), NEAR_CAP); m.castShadow = true; m.receiveShadow = false; m.count = 0; m.frustumCulled = false; group.add(m); return m; }));
   const impBake = bakeTreeImpostors(renderer, nat, treeTypes);
-  const impLayer = new CardLayer(cross2(), impostorMaterial(impBake.texture, impBake.cols, impBake.rows), trees.length); group.add(impLayer.mesh); impLayer.mesh.receiveShadow = false;
+  const impLayer = new CardLayer(cross2(), impostorMaterial(impBake.texture, impBake.cols, impBake.rows, !!Q.aa), trees.length); group.add(impLayer.mesh); impLayer.mesh.receiveShadow = false;
   // Rocks (static instanced)
   const rockTypes = ['Rock_Medium_1', 'Rock_Medium_2', 'Rock_Medium_3'];
-  const rocks = []; for (let i = 0; i < 900 && rocks.length < Q.rocks; i++) { const x = (rng() - 0.5) * 560, z = (rng() - 0.5) * 560; const hy = heightAt(x, z); const hillsy = x < -110 || rng() < 0.4; if (!hillsy || !okSpot(x, z, 4)) continue; rocks.push({ x, z, y: hy, t: i % 3, s: 0.7 + rng() * 1.4, r: rng() * 6 }); }
+  const rocks = []; for (let i = 0; i < 900 && rocks.length < Q.rocks; i++) { const x = (rng() - 0.5) * 560, z = (rng() - 0.5) * 560; const hillsy = x < -110 || rng() < 0.4; if (!hillsy || !okSpot(x, z, 4)) continue; const rs = 0.7 + rng() * 1.4; const hy = footY(x, z, 0.8 * rs, 0.8 * rs); rocks.push({ x, z, y: hy, t: i % 3, s: rs, r: rng() * 6 }); }
   const dummy = new THREE.Object3D();
   rockTypes.forEach((name, ti) => { const list = rocks.filter(r => r.t === ti); for (const p of nat[name]) { const m = new THREE.InstancedMesh(p.geo, p.mat, list.length); list.forEach((r, i) => { dummy.position.set(r.x, r.y - 0.2, r.z); dummy.rotation.set(0, r.r, 0); dummy.scale.setScalar(r.s); dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix); }); m.castShadow = true; m.receiveShadow = true; group.add(m); } });
   for (const r of rocks) col.addCircle(r.x, r.z, 1.3 * r.s, r.y + 1.6 * r.s, 'rock');
   // ground cover near player: alpha cards from the baked foliage atlas (one instanced draw)
   const fTex = A.tex.foliage; const cardMat = cardMaterial(fTex, { far: Q.grassDist });
-  const dens = [0.42, 0.72, 1.0][Q.level]; const cap = [700, 2000, 3800][Q.level];
+  const dens = [0.55, 0.9, 1.15][Q.level]; const cap = [1000, 2600, 4400][Q.level];
   const cover = new CardLayer(cross2(), cardMat, cap); cover.mesh.receiveShadow = true; group.add(cover.mesh);
+  // small loose stones scattered in the grass (one instanced draw)
+  const stoneCap = [260, 600, 1000][Q.level]; const stones = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.14, 0), new THREE.MeshStandardMaterial({ color: 0x9a948a, roughness: 0.95, map: T.rock_d }), stoneCap); stones.count0 = stoneCap; stones.count = 0; stones.frustumCulled = false; stones.receiveShadow = true; group.add(stones);
   const cellCache = new Map(); const cctx = { heightAt, splatAt, WATER, dens, blocked: (x, y, z) => col.pointBlocked(x, y, z, 0.6) };
   // hedgerows (cards) and dry-stone walls (merged mesh) — static
   const plan = planBoundaries({ PATH, RIVER, ZONES, heightAt, WATER, blocked: (x, z) => col.pointBlocked(x, heightAt(x, z), z, 1.2) });
@@ -366,18 +411,18 @@ export function buildWorld(scene, A, Q, col, renderer) {
     // trees (re-sorted every 12 m)
     const tcell = Math.floor(px / 12) + ',' + Math.floor(pz / 12);
     if (tcell !== lastTreeCell || force) { lastTreeCell = tcell;
-      const near = [], R = Q.treeNear, R2 = Q.viewDist * 1.15; impLayer.reset();
-      for (const t of trees) { const d = Math.hypot(t.x - px, t.z - pz); if (d < R) near.push(t); else if (d < R2) { const inf = impBake.info[t.t]; const k = hash2(t.x | 0, t.z | 0); impLayer.add(t.x, t.y - 0.2, t.z, t.t, t.s, t.r, [0.86 + k * 0.18, 0.9 + k * 0.12, 0.86 + k * 0.1], 1, 1, [inf.w, inf.h]); } }
+      const near = [], R = Q.treeNear, R2 = Q.viewDist * 1.22; impLayer.reset();
+      for (const t of trees) { const d = Math.hypot(t.x - px, t.z - pz); if (d < R) near.push(t); else if (d < R2) { const inf = impBake.info[t.t]; const k = hash2(t.x | 0, t.z | 0); impLayer.add(t.x, t.y - 0.2, t.z, t.t, t.s, t.r, [0.84 + k * 0.2, 0.95 + k * 0.12, 0.78 + k * 0.12], 1, 1, [inf.w, inf.h]); } }
       impLayer.commit();
-      nearMeshes.forEach((ms, ti) => { const list = near.filter(t => t.t === ti).slice(0, 160); for (const m of ms) { list.forEach((t, i) => { dummy.position.set(t.x, t.y - 0.15, t.z); dummy.rotation.set(0, t.r, 0); dummy.scale.setScalar(t.s); dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix); }); m.count = list.length; m.instanceMatrix.needsUpdate = true; } });
+      nearMeshes.forEach((ms, ti) => { const list = near.filter(t => t.t === ti).slice(0, NEAR_CAP); for (const m of ms) { list.forEach((t, i) => { dummy.position.set(t.x, t.y - 0.15, t.z); dummy.rotation.set(0, t.r, 0); dummy.scale.setScalar(t.s); dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix); }); m.count = list.length; m.instanceMatrix.needsUpdate = true; } });
     }
     // ground cover (per-cell recipes are cached)
-    const GR = Q.grassDist; const cx = Math.floor(px / 6), cz = Math.floor(pz / 6); const span = Math.ceil(GR / 6); cover.reset();
+    const GR = Q.grassDist; const cx = Math.floor(px / 6), cz = Math.floor(pz / 6); const span = Math.ceil(GR / 6); cover.reset(); let nStone = 0;
     const cells = []; for (let i = -span; i <= span; i++) for (let j = -span; j <= span; j++) { const dd = Math.hypot(i, j) * 6; if (dd <= GR + 3) cells.push([dd, cx + i, cz + j]); }
     cells.sort((a, b) => a[0] - b[0]);
     for (const [, gx, gz] of cells) { const key = gx + ',' + gz; let L = cellCache.get(key); if (!L) { L = coverCell(gx, gz, cctx); cellCache.set(key, L); if (cellCache.size > 900) cellCache.delete(cellCache.keys().next().value); }
-      for (const c of L) if (!cover.add(c[0], c[1], c[2], c[3], c[4], c[5], c[6])) break; }
-    cover.commit();
+      for (const c of L) { if (c[3] === 99) { if (nStone < stones.count0) { dummy.position.set(c[0], c[1], c[2]); dummy.rotation.set(c[6][0], c[5], c[6][1]); dummy.scale.set(c[4], c[4] * 0.55, c[4] * (0.7 + c[6][2] * 0.5)); dummy.updateMatrix(); stones.setMatrixAt(nStone++, dummy.matrix); } } else if (!cover.add(c[0], c[1], c[2], c[3], c[4], c[5], c[6])) break; } }
+    cover.commit(); stones.count = nStone; stones.instanceMatrix.needsUpdate = true;
   }
   // ---------- Gather nodes (herbs, berries, wood, stone, ore, wax hives, cloth bundles, fishing spots) ----------
   const nodeDefs = [['herb', 60, 'Plant_1'], ['berry', 45, 'Bush_Common_Flowers'], ['wood', 50, null], ['stone', 40, 'Pebble_Round_1'], ['iron_ore', 22, 'Rock_Medium_3'], ['wax', 14, null], ['cloth', 14, null], ['fish', 14, null], ['oak_wood', 16, null], ['mushroom', 0, null]];
@@ -389,20 +434,20 @@ export function buildWorld(scene, A, Q, col, renderer) {
       else if (type === 'iron_ore') { x = -150 - rng() * 120; z = -150 + rng() * 220; }
       else if (type === 'oak_wood') { const a = rng() * 6.28, d = rng() * 90; x = -60 + Math.cos(a) * d; z = -115 + Math.sin(a) * d; }
       else { x = (rng() - 0.5) * 520; z = (rng() - 0.5) * 520; }
-      if (type !== 'fish' && !okSpot(x, z, 3)) continue; const y = heightAt(x, z); if (type !== 'fish' && y < WATER + 0.4) continue;
+      if (type !== 'fish' && !okSpot(x, z, 3)) continue; const y = type === 'fish' ? heightAt(x, z) : footY(x, z, type === 'wood' || type === 'oak_wood' ? 0.8 : type === 'stone' || type === 'iron_ore' ? 0.45 : 0.25); if (type !== 'fish' && y < WATER + 0.4) continue;
       let mesh;
       if (model) { const pc = nat[model]; mesh = new THREE.Group(); for (const p of pc) { const mm = new THREE.Mesh(p.geo, p.mat); mm.castShadow = true; mesh.add(mm); } mesh.scale.setScalar(type === 'iron_ore' ? 0.55 : type === 'stone' ? 1.6 : 0.9); if (type === 'iron_ore') mesh.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.setHex(0x6a5a5a); o.material.metalness = 0.5; } }); }
       else if (type === 'wood' || type === 'oak_wood') { mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.25, 1.6, 7), type === 'oak_wood' ? new THREE.MeshStandardMaterial({ color: 0x4a3018, roughness: 0.9 }) : woodMat); mesh.rotation.z = Math.PI / 2; mesh.rotation.y = rng() * 3; mesh.position.y = 0.2; const g = new THREE.Group(); g.add(mesh); mesh.castShadow = true; mesh = g; }
       else if (type === 'wax') { mesh = new THREE.Group(); const b = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.38, 0.7, 9), nodeMats.wax); b.position.y = 1.05; const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.8, 0.12), woodMat); post.position.y = 0.4; mesh.add(b, post); }
       else if (type === 'cloth') { mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(0.35, 0), nodeMats.cloth); mesh.scale.set(1.2, 0.7, 1); mesh.position.y = 0.2; const g = new THREE.Group(); g.add(mesh); mesh = g; }
       else if (type === 'fish') { mesh = new THREE.Group(); const ring = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.65, 20), new THREE.MeshBasicMaterial({ color: 0xcfe8ff, transparent: true, opacity: 0.35 })); ring.rotation.x = -Math.PI / 2; ring.position.y = WATER - y + 0.03; mesh.add(ring); updaters.push((dt, t) => { const s = 1 + ((t * 0.6 + x) % 1) * 0.8; ring.scale.set(s, s, s); ring.material.opacity = 0.35 * (1 - ((t * 0.6 + x) % 1)); }); }
-      mesh.position.set(x, y, z); group.add(mesh); nodes.push({ type, x, z, mesh, respawn: 0 }); made++;
+      mesh.position.set(x, y, z); group.add(mesh); nodes.push({ type, x, z, mesh, respawn: 0 }); if (type !== 'fish') rec('node:' + type, x, z, y); made++;
     }
   }
   for (const n of nodes) if (n.type === 'chapel_key') { const g = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.03, 6, 12), goldMat); const y = heightAt(n.x, n.z); g.position.set(n.x, y + 0.35, n.z); group.add(g); n.mesh = g; updaters.push((dt, t) => { g.rotation.y = t * 2; }); }
 
   return {
-    group, terrain, interactives, nodes, lamps, bells: [bell1, bell2], stalls, trees, chimneys, doors, benches, fountainPos, kit,
+    placed, rocks, group, terrain, interactives, nodes, lamps, bells: [bell1, bell2], stalls, trees, chimneys, doors, benches, fountainPos, kit,
     update(dt, t, px, pz) { wind.value = t; for (const u of updaters) u(dt, t); refreshVeg(px, pz); },
     refreshVeg: () => refreshVeg(0, 0, true),
   };

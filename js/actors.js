@@ -1,12 +1,13 @@
 import * as THREE from 'three';
-import { clone as skClone } from '../vendor/addons/utils/SkeletonUtils.js?v=5';
-import { makeHuman, Animator } from './human.js?v=5';
-import { dressPilgrim, makeWeapon, attachWeapon, setGrip } from './gear.js?v=5';
-import { heightAt, WATER } from './world.js?v=5';
-import { ENEMY_TYPES, ITEMS } from './data.js?v=5';
-import { angDiff, clamp, lerp } from './util.js?v=5';
+import { clone as skClone } from '../vendor/addons/utils/SkeletonUtils.js?v=6';
+import { makeHuman, Animator, prayPose } from './human.js?v=6';
+import { dressReligious } from './sacred.js?v=6';
+import { dressPilgrim, makeWeapon, attachWeapon, setGrip } from './gear.js?v=6';
+import { heightAt, WATER } from './world.js?v=6';
+import { ENEMY_TYPES, ITEMS } from './data.js?v=6';
+import { angDiff, clamp, lerp } from './util.js?v=6';
 
-const HUMAN_MAP = { idle: 'Idle_Loop', walk: 'Walk_Loop', jog: 'Jog_Fwd_Loop', sprint: 'Sprint_Loop', a1: 'Sword_Regular_A', a2: 'Sword_Regular_B', a3: 'Sword_Regular_C', heavy: 'Sword_Attack', block: 'Sword_Block', roll: 'Roll', hit: 'Hit_Chest', kb: 'Hit_Knockback', death: 'Death01', pray: 'Spell_Simple_Shoot', gather: 'Farm_Harvest', pick: 'PickUp_Table', chest: 'Chest_Open', eat: 'Consume', talk: 'Idle_Talking_Loop', ready: 'Sword_Idle', prayidle: 'Spell_Simple_Idle_Loop', sit: 'Sitting_Idle_Loop', fold: 'Idle_FoldArms_Loop', zwalk: 'Zombie_Walk_Fwd_Loop', zidle: 'Zombie_Idle_Loop', zatk: 'Zombie_Scratch', punch: 'Punch_Jab', chop: 'TreeChopping_Loop', yes: 'Yes', lantern: 'Idle_Lantern_Loop', formal: 'Walk_Formal_Loop' };
+const HUMAN_MAP = { idle: 'Idle_Loop', walk: 'Walk_Loop', jog: 'Jog_Fwd_Loop', sprint: 'Sprint_Loop', a1: 'Sword_Regular_A', a2: 'Sword_Regular_B', a3: 'Sword_Regular_C', heavy: 'Sword_Attack', block: 'Sword_Block', roll: 'Roll', hit: 'Hit_Chest', kb: 'Hit_Knockback', death: 'Death01', pray: 'Idle_Loop', kneel: 'Idle_Loop', cast: 'Spell_Simple_Shoot', gather: 'Farm_Harvest', pick: 'PickUp_Table', chest: 'Chest_Open', eat: 'Consume', talk: 'Idle_Talking_Loop', ready: 'Sword_Idle', prayidle: 'Idle_Loop', sit: 'Sitting_Idle_Loop', fold: 'Idle_FoldArms_Loop', zwalk: 'Zombie_Walk_Fwd_Loop', zidle: 'Zombie_Idle_Loop', zatk: 'Zombie_Scratch', punch: 'Punch_Jab', chop: 'TreeChopping_Loop', yes: 'Yes', lantern: 'Idle_Lantern_Loop', formal: 'Walk_Formal_Loop' };
 export function groundY(G, x, z) { if (x > 900) return Math.max(0, G.col.surfaceAt(x, z)); return Math.max(heightAt(x, z), G.col.surfaceAt(x, z), WATER - 0.75); }
 
 // ===================== PLAYER =====================
@@ -43,7 +44,7 @@ export class Player {
   }
   pray() {
     const G = this.G, S = G.S; if (this.busy) return; if (S.faith < 18) { G.ui.toast('Not enough faith — rest at a shrine'); return; }
-    S.faith -= 18; this.start('pray', { speed: 1.2, prayAt: 0.45 }); G.audio.choir();
+    S.faith -= 18; this.start('pray', { dur: 1.5, prayAt: 0.45 }); G.audio.choir();
   }
   faceTarget() { const e = this.lock && this.lock.alive ? this.lock : this.G.nearestEnemy(this.pos, 4, this.yaw, 1.8); if (e) this.yaw = Math.atan2(e.pos.x - this.pos.x, e.pos.z - this.pos.z); }
   doAnim(k, d = 0.9) { if (this.busy) return false; this.start(k, { dur: d }); return true; }
@@ -122,6 +123,7 @@ export class Player {
     }
     // footsteps
     this.speed = sp; this.anim.update(dt);
+    if (this.act && (this.act.k === 'pray' || this.act.k === 'kneel')) { const p = this.act.t / this.act.dur; prayPose(this.obj, Math.min(1, p * 5, (1 - p) * 5), this.act.k === 'kneel'); }
     // footsteps locked to the locomotion clip: two foot contacts per cycle, so cadence follows walk / jog / sprint and their timeScale
     const ck = this.anim.curKey, ca = this.anim.cur;
     if (ca && (ck === 'walk' || ck === 'jog' || ck === 'sprint') && sp > 0.5 && !this.act) {
@@ -242,6 +244,7 @@ export class NPC {
     this.G = G; this.def = def; this.id = def.id; this.name = def.name;
     this.obj = makeHuman(G.A, def.look); G.scene.add(this.obj);
     if (def.look.extra) def.look.extra(this.obj);
+    if (def.extra) def.extra(this.obj); if (def.habit) dressReligious(this.obj, this.obj.userData.bones, def.habit); // cassock / habit / veil
     this.anim = new Animator(this.obj, G.A.clips, HUMAN_MAP); this.pos = this.obj.position; this.pos.set(def.x, heightAt(def.x, def.z), def.z);
     this.yaw = def.yaw || 0; this.baseYaw = this.yaw; this.idleK = def.idle || 'idle'; this.anim.play(this.idleK); this.anim.mixer.setTime(Math.random() * 3);
     this.route = def.route || null; this.ri = 0; this.waitT = Math.random() * 3; this.r = 0.38;
@@ -259,7 +262,7 @@ export class NPC {
     else if (mv === 0 && (!this.route || this.waitT > 0) && !this.follow) this.yaw += angDiff(this.yaw, this.baseYaw) * Math.min(1, dt * 1.5);
     this.pos.y = groundY(G, this.pos.x, this.pos.z) + (this.def.yOff || 0); this.obj.rotation.y = this.yaw;
     this.anim.play(mv > 2.5 ? 'jog' : mv > 0 ? 'walk' : (this.talking ? 'talk' : this.idleK), { speed: mv > 0 ? clamp(mv / 1.5, 0.7, 1.2) : 1 });
-    if (near) this.anim.update(dt);
+    if (near) { this.anim.update(dt); if (this.idleK === 'prayidle' && mv === 0 && !this.talking) prayPose(this.obj, 1, true); }
   }
 }
 

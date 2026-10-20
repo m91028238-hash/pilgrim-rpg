@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { ITEMS, SKILLS, RECIPES, SHOPS, MAIN_QUEST } from './data.js?v=5';
-import { PLACES, heightAt, splatAt, PATH, RIVER } from './world.js?v=5';
+import { ITEMS, SKILLS, RECIPES, SHOPS, MAIN_QUEST } from './data.js?v=6';
+import { PLACES, heightAt, splatAt, PATH, RIVER } from './world.js?v=6';
 const $ = id => document.getElementById(id);
 const SLOTS = ['weapon', 'hat', 'cloak', 'body', 'boots', 'trinket'];
 const SLOTN = { weapon: 'Staff / weapon', hat: 'Hat', cloak: 'Cloak', body: 'Body', boots: 'Boots', trinket: 'Trinket' };
@@ -103,7 +103,7 @@ export class UI {
   }
   hideTitle() { $('title').classList.add('hidden'); $('hud').classList.remove('hidden'); }
   credits() {
-    this.dialog('Credits', 'Characters, animations, Medieval Village MegaKit (incl. doors and windows), Fantasy Props MegaKit furniture and nature kit by Quaternius (CC0). Wolf, cow and the animated pig used as our wild boar by Quaternius (CC0, via poly.pizza). Foliage cards baked from Poly Haven plant scans (CC0: grass_medium_02, dandelion_01, celandine_01, periwinkle_plant, fern_02, nettle_plant, weed_plant_02, shrub_02/03/04). Terrain, sandstone, monastery floor, old wood floor and dry-stone wall textures and sky HDRI from Poly Haven (CC0). All sound — ambience, footsteps, breathing, combat — is synthesised live in the browser (no audio files). Built with three.js (MIT). Full list in ASSETS.md.', [{ t: 'Close' }]);
+    this.dialog('Credits', 'Characters, animations, Medieval Village MegaKit (incl. doors and windows), Fantasy Props MegaKit furniture and nature kit by Quaternius (CC0). Wolf, cow and the animated pig used as our wild boar by Quaternius (CC0, via poly.pizza). Foliage cards baked from Poly Haven plant scans (CC0: grass_medium_02, dandelion_01, celandine_01, periwinkle_plant, fern_02, nettle_plant, weed_plant_02, shrub_02/03/04). Terrain, sandstone, monastery floor, old wood floor and dry-stone wall textures and sky HDRI from Poly Haven (CC0). All sound — ambience, footsteps, breathing, combat — is synthesised live in the browser (no audio files). Church furnishings, statues, wayside cruceiros and Stations of the Cross are modelled in code for this game. Prayers are the traditional Catholic texts; the confession and blessing formulas follow the Roman Ritual (English translation). Built with three.js (MIT). Full list in ASSETS.md.', [{ t: 'Close' }]);
   }
   // ---- dialogue ----
   dialog(name, text, choices, npc) {

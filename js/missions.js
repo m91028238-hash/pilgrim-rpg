@@ -1,9 +1,9 @@
 // v5 structured missions: giver -> objective steps (each with a place on the map) -> reward.
 // Every step resolves to a world position, so the tracker line, the 3D beacon, the edge arrow and the minimap pin always know where to point.
 import * as THREE from 'three';
-import { Enemy, NPC } from './actors.js?v=5';
-import { heightAt } from './world.js?v=5';
-import { ITEMS } from './data.js?v=5';
+import { Enemy, NPC } from './actors.js?v=6';
+import { heightAt } from './world.js?v=6';
+import { ITEMS } from './data.js?v=6';
 
 const P = (x, z) => [x, z];
 // k: goto | talk | fetch | kill | pickup | escort | votive | kneel | shrine | return
@@ -50,7 +50,7 @@ export const MISSIONS = [
     reward: { xp: 50, coin: 20, items: { herb_poultice: 1 } }, outro: 'They smell like summer. Thank you — keep this poultice, you look like you need it.' },
   { id: 'm_monk', name: 'The Blind Monk', giver: 'sister', area: 'Villafranca → Forest Shrine', minLvl: 2, after: 'm_candles',
     intro: 'Brother Bento wants to pray at the Forest Shrine, but he cannot see the path and the woods are not safe. Walk with him and keep him close.',
-    steps: [{ k: 'escort', who: { name: 'Brother Bento', look: { sex: 'm', outfit: 'Ranger', hair: ['Hair_Buzzed', 'Hair_Beard'], tints: { cloth: 0x4a3a2a } } }, to: P(18, -50), r: 7, d: 'Lead Brother Bento to the Forest Shrine', place: 'Forest Shrine' }],
+    steps: [{ k: 'escort', who: { name: 'Brother Bento', look: { sex: 'm', outfit: 'Ranger', hair: ['Hair_Buzzed', 'Hair_Beard'], tints: { cloth: 0x5a4632 } }, habit: 'friar' }, to: P(18, -50), r: 7, d: 'Lead Brother Bento to the Forest Shrine', place: 'Forest Shrine' }],
     reward: { xp: 90, coin: 30, items: { olive_rosary: 1 } }, outro: 'I can hear the leaves here. Thank you, my son. Take my rosary — I know every bead by touch, I will not need it.' },
   // ---------------- Forest Shrine (hermit) ----------------
   { id: 'm_hermit', name: 'The Hermit\'s Peace', giver: 'tome', area: 'Wolf Woods', minLvl: 2,
@@ -59,7 +59,7 @@ export const MISSIONS = [
     reward: { xp: 100, coin: 35, items: { st_christopher: 1 } }, outro: 'Silence again. Saint Christopher kept me safe on the road — let him keep you.' },
   { id: 'm_medal', name: 'The Chapel Medal', giver: 'tome', area: 'Ruined Chapel', minLvl: 2, after: 'm_hermit',
     intro: 'Before the chapel fell, the priest buried a medal of Our Lady by its door so the bandits would not take it. Find it and bring it to the cathedral in Santiago, to Father Anselm.',
-    steps: [{ k: 'pickup', at: P(-46, -165), label: 'Medal of Our Lady', d: 'Find the medal by the Ruined Chapel door', place: 'Ruined Chapel' }, { k: 'talk', npc: 'priest', d: 'Give the medal to Father Anselm in Santiago', place: 'Santiago', line: 'Our Lady of the chapel! We thought it lost for good. It will hang by the altar tonight. Keep this one — it was blessed with it.' }],
+    steps: [{ k: 'pickup', at: P(-46, -165), label: 'Medal of Our Lady', d: 'Find the medal by the Ruined Chapel door', place: 'Ruined Chapel' }, { k: 'talk', npc: 'priest', d: 'Give the medal to Father Anselm in Santiago', place: 'Santiago', line: 'Our Lady of the chapel! We thought it lost for good. It will hang by the altar tonight. Keep this one — I have blessed it for you.' }],
     reward: { xp: 120, coin: 45, items: { miraculous_medal: 1 } } },
   // ---------------- Western Hills (shepherd) ----------------
   { id: 'm_crook', name: 'The Shepherd\'s Crook', giver: 'elena', area: 'Western Hills', minLvl: 1,
@@ -75,7 +75,7 @@ export const MISSIONS = [
     intro: 'Every pilgrim should light a candle in the cathedral and kneel before the Apostle. Here are two coins for the candles — go, it is just across the plaza.',
     onAccept: G => { G.S.coin += 2; G.ui.toast('+2 coin for the candles'); },
     steps: [{ k: 'votive', room: 'cathedral', n: 2, d: 'Light 2 votive candles in the cathedral', place: 'Cathedral of Santiago' }, { k: 'kneel', room: 'cathedral', d: 'Kneel before the high altar', place: 'Cathedral of Santiago' }, { k: 'return', d: 'Return to Brother Pedro at the market' }],
-    reward: { xp: 80, coin: 20, items: { blessing_scroll: 1 } }, outro: 'You have the look of someone who has been heard. Take this blessing for the road.' },
+    reward: { xp: 80, coin: 20, items: { blessing_scroll: 1 } }, outro: 'You have the look of someone who has been heard. Take this holy card with the Pilgrim\'s Prayer for the road.' },
   { id: 'm_sword', name: 'The Wooden Sword', giver: 'kid', area: 'Santiago', minLvl: 1,
     intro: 'I lost my wooden sword! I was fighting a dragon by the Town Shrine. It was probably a goat. Please find it!',
     steps: [{ k: 'pickup', at: P(176, -150), label: 'wooden sword', d: 'Find the boy\'s wooden sword near the Town Shrine', place: 'Town Shrine' }, { k: 'return', d: 'Bring the sword back to the village boy' }],
@@ -92,7 +92,7 @@ export const MISSIONS = [
 // three new givers (the rest are existing villagers)
 export const MISSION_NPCS = [
   { id: 'martin', name: 'Martín the miller', x: -100, z: 90, yaw: 2.4, idle: 'fold', look: { sex: 'm', outfit: 'Peasant', hair: ['Hair_Buzzed', 'Hair_Beard'], tints: { cloth: 0x8a7a5a } }, talk: () => ({ t: 'The river turns my wheel and my mules carry the flour. When the wolves let them.', c: [{ t: 'Goodbye' }] }) },
-  { id: 'tome', name: 'Brother Tomé', x: 21, z: -48, yaw: -2.6, idle: 'idle', look: { sex: 'm', outfit: 'Ranger', hair: ['Hair_Long', 'Hair_Beard'], tints: { cloth: 0x3a3028 } }, extra: o => o.traverse(m => { if (m.isMesh && /Hood/.test(m.name)) m.visible = false; }), talk: () => ({ t: 'Peace be with you. I keep this shrine and pray for those on the road.', c: [{ t: 'And with your spirit.' }] }) },
+  { id: 'tome', name: 'Brother Tomé', x: 21, z: -48, yaw: -2.6, idle: 'idle', look: { sex: 'm', outfit: 'Ranger', hair: ['Hair_Long', 'Hair_Beard'], tints: { cloth: 0x5a4632 } }, habit: 'friar', extra: o => o.traverse(m => { if (m.isMesh && /Hood/.test(m.name)) m.visible = false; }), talk: () => ({ t: 'Peace be with you. I keep this shrine and pray for those on the road.', c: [{ t: 'And with your spirit.' }] }) },
   { id: 'elena', name: 'Elena the shepherd', x: -165, z: -25, yaw: 0.8, idle: 'idle', look: { sex: 'f', outfit: 'Peasant', hair: ['Hair_Long'], tints: { cloth: 0x6a5a3a } }, talk: () => ({ t: 'Mind the sheep. And the bandits, further up.', c: [{ t: 'Goodbye' }] }) },
 ];
 
@@ -145,7 +145,7 @@ export class Missions {
   cleanup(id) { this.removePickup(id); this.despawn(id); this.releaseFollower(id); }
   // ---------------------------------------------------------------- step mechanics
   makePickup(id, s) {
-    if (this.pickups[id]) return; const G = this.G, [x, z] = s.at, y = heightAt(x, z);
+    if (this.pickups[id]) return; const G = this.G, [x, z] = s.at; let y = heightAt(x, z); for (const [a, b] of [[-0.25, -0.2], [0.25, -0.2], [0.25, 0.2], [-0.25, 0.2]]) y = Math.min(y, heightAt(x + a, z + b)); y -= 0.02;
     const grp = new THREE.Group(); const b = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.26, 0.3), this.pickMat); b.position.y = 0.13; b.castShadow = true; grp.add(b);
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: G.ui.glowTex || (G.ui.glowTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); const r = g.createRadialGradient(32, 32, 0, 32, 32, 32); r.addColorStop(0, 'rgba(255,225,140,1)'); r.addColorStop(1, 'rgba(255,200,90,0)'); g.fillStyle = r; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })()), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
     glow.scale.setScalar(1.6); glow.position.y = 0.35; grp.add(glow); grp.position.set(x, y, z); G.world.group.add(grp);
@@ -155,7 +155,7 @@ export class Missions {
   pickup(it) { const s = this.step(it.mid); if (!s || s.k !== 'pickup') return; this.G.player.doAnim?.('pick', 0.8); this.G.ui.toast(`You found ${s.label}`, 'good'); this.advance(it.mid, false); }
   makeFollower(id, s) {
     if (this.followers[id]) return; const G = this.G, gp = this.giverPos(this.byId[id]) || G.player.pos; const P0 = G.player.pos;
-    const d = { id: 'f_' + id, name: s.who.name, x: (gp.x + P0.x) / 2 + 1, z: (gp.z + P0.z) / 2 + 1, look: s.who.look, talk: () => ({ t: 'Lead on, I will follow your footsteps.', c: [{ t: 'Stay close.' }] }) };
+    const d = { id: 'f_' + id, name: s.who.name, x: (gp.x + P0.x) / 2 + 1, z: (gp.z + P0.z) / 2 + 1, look: s.who.look, habit: s.who.habit, extra: o => o.traverse(m => { if (m.isMesh && /Hood/.test(m.name)) m.visible = false; }), talk: () => ({ t: 'Lead on, I will follow your footsteps.', c: [{ t: 'Stay close.' }] }) };
     const n = new NPC(G, d); n.follow = true; n.obj.traverse(m => { if (m.isMesh && /Hood/.test(m.name)) m.visible = false; }); G.npcs.push(n); this.followers[id] = n;
   }
   releaseFollower(id) { const n = this.followers[id]; if (!n) return; n.follow = false; delete this.followers[id]; setTimeout(() => { n.obj.visible = false; n.hidden = true; this.G.scene.remove(n.obj); const L = this.G.npcs; const i = L.indexOf(n); if (i >= 0) L.splice(i, 1); }, 6000); }

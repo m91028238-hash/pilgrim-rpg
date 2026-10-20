@@ -1,7 +1,7 @@
 // Foliage: alpha-card ground cover from a baked atlas, hedgerows, dry-stone walls, tree impostors and wind.
 import * as THREE from 'three';
-import { mergeGeometries } from '../vendor/addons/utils/BufferGeometryUtils.js?v=5';
-import { mulberry, fbm, hash2, distToPolyline } from './util.js?v=5';
+import { mergeGeometries } from '../vendor/addons/utils/BufferGeometryUtils.js?v=6';
+import { mulberry, fbm, hash2, distToPolyline } from './util.js?v=6';
 
 // atlas tiles (4x4): [width m, height m]
 export const TILES = [[0.9, 0.55], [1.0, 0.85], [0.9, 0.55], [0.9, 0.55], [0.9, 0.6], [0.9, 0.7], [1.0, 0.6], [1.1, 0.55], [0.8, 0.9], [1.0, 0.5], [2.2, 1.4], [2.2, 1.4], [1.2, 0.9], [0.9, 0.55], [1.0, 0.6], [1.0, 0.95]];
@@ -84,7 +84,7 @@ export function addTreeWind(mat, amt = 1) {
 /** Bake side-view impostors of tree models into an atlas render target */
 export function bakeTreeImpostors(renderer, nat, names) {
   const cols = 4, rows = 2, TW = 256, TH = 512, RT = new THREE.WebGLRenderTarget(TW * cols, TH * rows, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter });
-  const scene = new THREE.Scene(); scene.add(new THREE.AmbientLight(0xffffff, 1.35)); const dl = new THREE.DirectionalLight(0xffffff, 2.0); dl.position.set(0.4, 1, 0.8); scene.add(dl);
+  const scene = new THREE.Scene(); scene.add(new THREE.AmbientLight(0xffffff, 1.2)); const dl = new THREE.DirectionalLight(0xffffff, 1.5); dl.position.set(0.2, 0.7, 1.0); scene.add(dl);
   const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
   const prev = { tm: renderer.toneMapping, rt: renderer.getRenderTarget(), cc: renderer.getClearColor(new THREE.Color()), ca: renderer.getClearAlpha(), sc: renderer.getScissorTest(), at: renderer.autoClear };
   renderer.toneMapping = THREE.NoToneMapping; renderer.setRenderTarget(RT); renderer.setClearColor(0x34502a, 0); renderer.autoClear = false; renderer.clear(); renderer.setScissorTest(true);
@@ -103,18 +103,30 @@ export function bakeTreeImpostors(renderer, nat, names) {
 }
 
 /** Impostor material: atlas (cols x rows), per-instance tile; leaves lit from above */
-export function impostorMaterial(tex, cols, rows) {
-  const m = new THREE.MeshLambertMaterial({ map: tex, alphaTest: 0.5, side: THREE.DoubleSide });
+export function impostorMaterial(tex, cols, rows, a2c = false) {
+  // v6: rounded "canopy" normals + base occlusion so distant trees read as volumes, not flat grey cards
+  const m = new THREE.MeshLambertMaterial({ map: tex, alphaTest: 0.45, side: THREE.DoubleSide });
+  if (a2c) { m.alphaToCoverage = true; }
   m.onBeforeCompile = sh => {
     sh.uniforms.uWind = wind;
-    sh.vertexShader = 'attribute float iTile;\nuniform float uWind;\n' + sh.vertexShader
+    sh.vertexShader = 'attribute float iTile;\nuniform float uWind;\nvarying float vImpY;\n' + sh.vertexShader
       .replace('#include <uv_vertex>', `#include <uv_vertex>
-        vMapUv = (vec2(mod(iTile, ${cols}.0), ${rows - 1}.0 - floor(iTile / ${cols}.0)) + mix(vec2(0.004), vec2(0.996), uv)) / vec2(${cols}.0, ${rows}.0);`)
+        vMapUv = (vec2(mod(iTile, ${cols}.0), ${rows - 1}.0 - floor(iTile / ${cols}.0)) + mix(vec2(0.004), vec2(0.996), uv)) / vec2(${cols}.0, ${rows}.0); vImpY = position.y;`)
+      .replace('#include <defaultnormal_vertex>', `#include <defaultnormal_vertex>
+        {
+          vec3 latW = mat3(modelMatrix) * mat3(instanceMatrix) * vec3(position.x, 0.0, position.z);
+          float lw = length(latW); vec3 latV = lw > 1e-4 ? normalize(mat3(viewMatrix) * latW) : vec3(0.0);
+          float side = clamp(length(position.xz) * 2.0, 0.0, 1.0);
+          vec3 upV = normalize(mat3(viewMatrix) * vec3(0.0, 1.0, 0.0));
+          transformedNormal = normalize(latV * side * 0.8 + upV * (0.25 + (position.y - 0.35) * 1.2) + vec3(0.0, 0.0, 0.75));
+        }`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         vec4 ip = instanceMatrix[3]; transformed.x += sin(uWind * 1.3 + ip.x * 0.11 + ip.z * 0.07) * 0.03 * position.y * position.y;`);
-    sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', NORMAL_BEGIN_NOFLIP());
+    sh.fragmentShader = 'varying float vImpY;\n' + sh.fragmentShader.replace('#include <normal_fragment_begin>', NORMAL_BEGIN_NOFLIP())
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        diffuseColor.rgb *= mix(0.74, 1.08, smoothstep(0.04, 0.6, vImpY));`);
   };
-  m.customProgramCacheKey = () => 'imp' + cols + rows; return m;
+  m.customProgramCacheKey = () => 'imp6' + cols + rows + a2c; return m;
 }
 export const cross2 = () => crossGeo(2);
 export const cross3 = () => crossGeo(3);
@@ -138,6 +150,8 @@ export function coverCell(gx, gz, ctx) {
   if (nFlower) put(flowerKind, nFlower, 0.8, 1.2, (a) => [1, 1, 1]);
   if (nFlower) put(T.dandelion, Math.round(nFlower * 0.3), 0.8, 1.1, () => [1, 1, 1]);
   if (nFor) { put(r() < 0.5 ? T.fern : T.fern2, nFor, 0.9, 1.6, (a) => [0.85 + a * 0.2, 1, 0.8]); put(T.nettle, Math.round(nFor * 0.3), 0.8, 1.3, () => [0.9, 1, 0.85]); put(T.weed, Math.round(nFor * 0.4), 0.8, 1.2, () => [0.9, 1, 0.85]); }
+  if (!nFlower && r() < 0.6) put(flowerKind, Math.max(1, Math.round(1.5 * dens)), 0.75, 1.05, () => [1, 1, 1]); // scattered wildflowers
+  { const nS = Math.round((hills ? 6 : forest > 0.5 ? 2 : 3) * dens * (0.4 + r())); for (let k = 0; k < nS; k++) { const x = gx * 6 + r() * 6, z = gz * 6 + r() * 6, a = r(), b = r(), c = r(); const y = heightAt(x, z); if (y < WATER + 0.25) continue; const s = splatAt(x, z, y, 0); if (s[2] > 0.3 || s[0] > 0.8) continue; if (blocked(x, y, z)) continue; out.push([x, y - 0.03, z, 99, 0.5 + a * a * 1.4, b * 6.283, [c * 0.5, a * 0.6, b]]); } }
   if (!forest && r() < 0.18 * dens) put(T.bush, 1, 0.9, 1.4, (a) => [0.62 + a * 0.12, 0.95, 0.5], s => s[0] < 0.1);
   return out;
 }

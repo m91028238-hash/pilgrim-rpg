@@ -25,6 +25,13 @@ Every file is stored in this repo under `assets/` or `vendor/`. Nothing is loade
 | assets/env/sky_1k.hdr | kloofendal_48d_partly_cloudy_puresky (environment lighting) | Poly Haven, https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky | CC0 |
 | vendor/three.module.min.js, vendor/addons/* | three.js r170 | https://threejs.org | MIT |
 
-Procedural content written for v4 (no third-party files): stained-glass windows, the crucifix corpus pose, the Marian and St James statues, candles and flames, light shafts, chimney smoke, birds, tree impostors and wind sway.
+Procedural content written for v4 (no third-party files): stained-glass windows, the crucifix corpus pose, candles and flames, light shafts, chimney smoke, birds, tree impostors and wind sway.
 
 All audio is generated in the browser with WebAudio: ambience, combat sounds, and (v5) footsteps that change with surface (grass, dirt road, stone, wooden floors, shallow water) and pace (walk, jog, sprint), plus breathing when you sprint or run low on stamina. There are no audio files, so no audio licences apply.
+
+## v6 additions (all written in code for this game, no third-party files)
+
+- `js/sacred.js`: static polychrome statues of Our Lady (Immaculate Conception style) and St James as a pilgrim, Galician granite cruceiros, Stations of the Cross plaques (canvas-painted), religious habits (cassock, Franciscan habit with cord, nun's habit and veil), scallop shell.
+- `js/interiors.js`: gilded Baroque retablo with Solomonic columns, wall-bracket sanctuary lamp, altar rails, octagonal baptismal font.
+- `js/prayers.js`: traditional Catholic prayers (Our Father, Hail Mary, Glory Be, Act of Contrition, St Michael, Angelus: traditional public-domain English forms) and the widely circulated English text of the Camino Pilgrim's Prayer. The absolution, priestly blessing and baptismal-promise formulas are short quotations of the English liturgical texts (© ICEL), used for devotional accuracy.
+- Ground stones are an instanced icosahedron using the existing Poly Haven rock texture (CC0).

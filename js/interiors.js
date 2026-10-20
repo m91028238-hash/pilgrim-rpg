@@ -1,11 +1,12 @@
 // Enterable interiors: built lazily at remote coordinates (x > IX) and swapped in with a short fade.
 import * as THREE from 'three';
-import { kitPieces, Batch, M4 } from './world.js?v=5';
-import { loadInterior } from './assets.js?v=5';
-import { makeHuman } from './human.js?v=5';
-import { makeHat, makeWeapon, attachWeapon } from './gear.js?v=5';
-import { NPC } from './actors.js?v=5';
-import { Flames, dustMotes } from './fx.js?v=5';
+import { kitPieces, Batch, M4 } from './world.js?v=6';
+import { loadInterior } from './assets.js?v=6';
+import { makeHuman } from './human.js?v=6';
+import { makeHat, makeWeapon, attachWeapon } from './gear.js?v=6';
+import { NPC } from './actors.js?v=6';
+import { Flames, dustMotes } from './fx.js?v=6';
+import { statueMary, statueJames, stationsTexture, stationGeo, scallopGeo } from './sacred.js?v=6';
 
 export const IX = 900; // anything beyond x = IX is interior space
 const SLOT = { cathedral: 0, church_vf: 1, inn_sr: 2, inn_st: 3, shop_st: 4, house_sr1: 5, house_sr2: 6, house_st: 7 };
@@ -95,6 +96,7 @@ export class Interiors {
     const G = this.G; const O = V3(1000 + SLOT[id] * 140, 0, 0); const group = new THREE.Group(); group.position.copy(O); G.scene.add(group);
     const B = new Batch(); const R = { id, door, O, group, B, updaters: [], lamps: [], spawn: V3(0, 0, 0), interactives: [], name: door.name, npcs: [] };
     const self = this, M = this.M, col = G.col, kit = this.kit, vk = G.world.kit;
+    const c_geo = (g, mat) => { if (!g.index) g.setIndex([...Array(g.attributes.position.count).keys()]); B.addGeo(g, mat); };
     const ctx = R.ctx = {
       box(w, h, d, x, y, z, mat, ry = 0, s = 2) { const g = new THREE.BoxGeometry(w, h, d); g.applyMatrix4(M4(x, y + h / 2, z, ry)); wuv(g, s); B.addGeo(g, mat); return g; },
       geo(g, mat) { B.addGeo(g, mat); },
@@ -157,9 +159,53 @@ export class Interiors {
       kneeler(x, z, ry) { const g = M4(x, 0, z, ry); for (const [w, h, d, px, py, pz, m] of [[0.9, 0.12, 0.3, 0, 0, 0.2, M.crimson], [0.9, 0.06, 0.32, 0, 0.12, 0.2, M.red], [0.08, 0.9, 0.08, -0.4, 0, -0.1, M.pew], [0.08, 0.9, 0.08, 0.4, 0, -0.1, M.pew], [0.95, 0.05, 0.32, 0, 0.9, -0.1, M.pew]]) { const b = new THREE.BoxGeometry(w, h, d); b.translate(px, py + h / 2, pz); b.applyMatrix4(g); wuv(b, 1.4); B.addGeo(b, m); } ctx.solid(x, z, 0.5, 0.2, 1.0, ry); },
       tabernacle(x, y, z, s = 1) { ctx.box(0.7 * s, 0.75 * s, 0.55 * s, x, y, z, M.gold, 0, 1); const roof = new THREE.ConeGeometry(0.5 * s, 0.35 * s, 4); roof.rotateY(Math.PI / 4); roof.translate(x, y + 0.92 * s, z); B.addGeo(roof, M.gold); ctx.box(0.36 * s, 0.46 * s, 0.02, x, y + 0.14 * s, z + 0.28 * s, M.crimson, 0, 1);
         ctx.box(0.04 * s, 0.22 * s, 0.03, x, y + 1.08 * s, z, M.gold, 0, 1); ctx.box(0.14 * s, 0.04 * s, 0.03, x, y + 1.22 * s, z, M.gold, 0, 1); ctx.box(0.05 * s, 0.05 * s, 0.03, x + 0.1 * s, y + 0.36 * s, z + 0.29 * s, M.gold, 0, 1); },
-      sanctuaryLamp(x, y, z) { const ch = new THREE.CylinderGeometry(0.008, 0.008, 30, 4); ch.translate(x, y + 15.3, z); B.addGeo(ch, M.gold); const cup = new THREE.LatheGeometry([[0, 0], [0.1, 0.02], [0.14, 0.12], [0.12, 0.26], [0.0, 0.26]].map(p => new THREE.Vector2(p[0], p[1])), 12); cup.translate(x, y, z); B.addGeo(cup, M.gold);
-        const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.16, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff2a1a).multiplyScalar(2.2) })); glass.position.set(x, y + 0.32, z); group.add(glass); ctx.light(x, y + 0.4, z, 2.5, 0xff3020); ctx.flame(x, y + 0.36, z, 0.03);
-        R.updaters.push((dt, t) => { glass.material.color.setRGB(2.2 + Math.sin(t * 9) * 0.25, 0.25, 0.12); }); },
+      /** red sanctuary lamp on a gilded wall bracket beside the tabernacle (wx = wall x, dir = -1 on the right wall). Flickers, never swings. */
+      sanctuaryLamp(wx, y, z, dir = -1) {
+        const arm = 0.62, lx = wx + dir * arm;
+        ctx.box(0.05, 0.36, 0.18, wx + dir * 0.03, y - 0.18, z, M.gold, 0, 1); ctx.box(arm, 0.04, 0.05, wx + dir * arm / 2, y, z, M.gold, 0, 1);
+        const sc = new THREE.CylinderGeometry(0.006, 0.006, 0.26, 4); sc.translate(lx, y - 0.13, z); B.addGeo(sc, M.gold);
+        const cup = new THREE.LatheGeometry([[0, 0], [0.05, 0.0], [0.1, 0.05], [0.12, 0.12], [0.1, 0.13], [0, 0.1]].map(p => new THREE.Vector2(p[0], p[1])), 14); cup.translate(lx, y - 0.42, z); B.addGeo(cup, M.gold);
+        const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.055, 0.15, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff2a1a).multiplyScalar(2.0), transparent: true, opacity: 0.92 })); glass.position.set(lx, y - 0.24, z); group.add(glass);
+        ctx.light(lx, y - 0.2, z, 2.2, 0xff3020); ctx.flame(lx, y - 0.2, z, 0.025); (R.hangers = R.hangers || []).push(glass);
+        R.updaters.push((dt, t) => { const f = 1.9 + Math.sin(t * 7.3) * 0.18 + Math.sin(t * 17.1) * 0.08; glass.material.color.setRGB(f, 0.22, 0.1); }); },
+      /** Baroque gilded retablo against the apse wall (back at z). Returns statue niche / crucifix anchor points. */
+      retablo(z, w, hMain, y0, k = 1) {
+        const navy = self._navy || (self._navy = new THREE.MeshStandardMaterial({ color: 0x1c2c58, roughness: 0.7 }));
+        const ph = 0.9 * k, top = y0 + ph + hMain; const cw = w * 0.4, sw = (w - cw) / 2;
+        ctx.box(w + 0.2, ph, 0.6, 0, y0, z + 0.3, M.gold, 0, 1); ctx.box(w + 0.3, 0.08, 0.66, 0, y0 + ph, z + 0.33, M.gold, 0, 1);
+        ctx.box(w, hMain, 0.06, 0, y0 + ph, z + 0.03, M.crimson, 0, 1);
+        const cr = 0.11 * k; for (const x of [-w / 2 + 0.15, -cw / 2 - 0.1, cw / 2 + 0.1, w / 2 - 0.15]) { // Solomonic (twisted) columns
+          const core = new THREE.CylinderGeometry(cr, cr, hMain - 0.3, 10); core.translate(x, y0 + ph + 0.15 + (hMain - 0.3) / 2, z + 0.35); c_geo(core, M.gold);
+          const pts = []; const turns = 4; for (let i = 0; i <= 72; i++) { const t = i / 72, a = t * turns * Math.PI * 2; pts.push(V3(x + Math.cos(a) * cr * 1.05, y0 + ph + 0.15 + t * (hMain - 0.3), z + 0.35 + Math.sin(a) * cr * 1.05)); }
+          c_geo(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 110, cr * 0.5, 6, false), M.gold);
+          ctx.box(cr * 3.2, 0.15, cr * 3.2, x, y0 + ph, z + 0.35, M.gold, 0, 1); ctx.box(cr * 3.2, 0.15, cr * 3.2, x, top - 0.15, z + 0.35, M.gold, 0, 1); }
+        ctx.box(w + 0.4, 0.32 * k, 0.72, 0, top, z + 0.36, M.gold, 0, 1); ctx.box(w + 0.6, 0.1, 0.84, 0, top + 0.32 * k, z + 0.42, M.gold, 0, 1);
+        // attic: arched centre panel with a gilded glory (rays)
+        const ar = cw * 0.5, ay = top + 0.42 * k; ctx.box(cw, ar * 0.8, 0.06, 0, ay, z + 0.05, M.crimson, 0, 1);
+        { const arc = new THREE.CircleGeometry(ar, 24, 0, Math.PI); arc.translate(0, ay + ar * 0.8, z + 0.05); c_geo(arc, M.crimson); const fr = new THREE.TorusGeometry(ar, 0.07 * k, 6, 24, Math.PI); fr.translate(0, ay + ar * 0.8, z + 0.12); c_geo(fr, M.gold); }
+        for (const sx of [-1, 1]) { ctx.box(0.12, ar * 0.8, 0.14, sx * ar, ay, z + 0.12, M.gold, 0, 1); const vol = new THREE.TorusGeometry(0.28 * k, 0.06 * k, 6, 14, Math.PI * 1.2); vol.rotateZ(sx > 0 ? 0 : Math.PI * 0.8); vol.translate(sx * (ar + 0.32 * k), ay + 0.28 * k, z + 0.2); c_geo(vol, M.gold); }
+        { const gy = ay + ar * 0.75; const d = new THREE.CircleGeometry(0.2 * k, 20); d.translate(0, gy, z + 0.1); c_geo(d, M.gold); for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2, L = (i % 2 ? 0.32 : 0.48) * k; const r = new THREE.BoxGeometry(0.03 * k, L, 0.02); r.translate(0, 0.2 * k + L / 2, 0); r.rotateZ(a); r.translate(0, gy, z + 0.1); c_geo(r, M.gold); } }
+        // side niches with shell-headed arches and gilded corbels (peanas)
+        const nW = sw * 0.62, nH = hMain * 0.62, nY = y0 + ph + hMain * 0.14, out = { y0, ph, top };
+        for (const sx of [-1, 1]) { const nx = sx * (cw / 2 + sw / 2); ctx.box(nW, nH, 0.05, nx, nY, z + 0.07, navy, 0, 1);
+          const sh = new THREE.SphereGeometry(nW / 2, 16, 8, Math.PI / 2, Math.PI, 0, Math.PI / 2); sh.translate(nx, nY + nH, z + 0.07); c_geo(sh, M.gold);
+          const fr = new THREE.TorusGeometry(nW / 2, 0.05 * k, 6, 20, Math.PI); fr.translate(nx, nY + nH, z + 0.14); c_geo(fr, M.gold); for (const ex of [-1, 1]) ctx.box(0.08, nH, 0.12, nx + ex * nW / 2, nY, z + 0.12, M.gold, 0, 1);
+          ctx.box(nW * 0.85, 0.12 * k, 0.5, nx, nY, z + 0.3, M.gold, 0, 1); out[sx < 0 ? 'left' : 'right'] = { x: nx, y: nY + 0.12 * k, z: z + 0.42 }; }
+        out.centre = { x: 0, y: y0 + ph, z: z + 0.1 };
+        ctx.solid(0, z + 0.35, w / 2 + 0.2, 0.45, top + 1.5); return out; },
+      /** altar rail of turned balusters with a kneeling step; gap of 2*xIn in the middle */
+      rails(zr, xIn, xOut) { for (const s of [-1, 1]) { const x0 = s * xIn, x1 = s * xOut; const cx2 = (x0 + x1) / 2, L = Math.abs(x1 - x0); ctx.box(L, 0.08, 0.2, cx2, 0.9, zr, M.stone, 0, 1.4); ctx.box(L, 0.12, 0.3, cx2, 0, zr, M.stone, 0, 1.4);
+        for (let x = Math.min(x0, x1) + 0.15; x < Math.max(x0, x1); x += 0.3) { const g = new THREE.LatheGeometry([[0, 0], [0.06, 0], [0.04, 0.2], [0.07, 0.4], [0.035, 0.65], [0.05, 0.78], [0, 0.78]].map(p => new THREE.Vector2(p[0], p[1])), 8); g.translate(x, 0.12, zr); B.addGeo(g, M.stone); }
+        ctx.solid(cx2, zr, L / 2, 0.18, 1.2); ctx.box(L, 0.12, 0.32, cx2, 0, zr + 0.4, M.crimson, 0, 1); } },
+      /** 14 Stations of the Cross: [x, z, ry] per station (I..XIV) */
+      stations(list, y = 1.55) { const m = self._stm || (self._stm = new THREE.MeshStandardMaterial({ map: stationsTexture(), roughness: 0.75 }));
+        list.forEach(([x, z, ry], i) => { const g = stationGeo(i); g.applyMatrix4(M4(x, y, z, ry)); B.addGeo(g, m); const f = new THREE.BoxGeometry(0.5, 0.68, 0.04); f.translate(0, 0, -0.025); f.applyMatrix4(M4(x, y, z, ry)); wuv(f, 1); B.addGeo(f, M.darkwood);
+          const c1 = new THREE.BoxGeometry(0.035, 0.2, 0.03), c2 = new THREE.BoxGeometry(0.13, 0.035, 0.03); c1.translate(0, 0.45, 0); c2.translate(0, 0.48, 0); c1.applyMatrix4(M4(x, y, z, ry)); c2.applyMatrix4(M4(x, y, z, ry)); B.addGeo(c1, M.darkwood); B.addGeo(c2, M.darkwood); }); },
+      /** octagonal granite baptismal font */
+      baptismal(x, z) { const g = new THREE.LatheGeometry([[0, 0], [0.55, 0], [0.56, 0.1], [0.34, 0.22], [0.3, 0.55], [0.62, 0.62], [0.78, 0.86], [0.8, 1.0], [0.72, 1.0], [0.64, 0.9], [0, 0.88]].map(p => new THREE.Vector2(p[0], p[1])), 8); g.translate(x, 0, z); B.addGeo(g, M.stone);
+        const w = new THREE.Mesh(new THREE.CircleGeometry(0.68, 8), new THREE.MeshStandardMaterial({ color: 0x8fb0bc, roughness: 0.05, metalness: 0.3 })); w.rotation.x = -Math.PI / 2; w.rotation.z = Math.PI / 8; w.position.set(x, 0.95, z); group.add(w);
+        const sh = new THREE.Mesh(scallopGeo(), M.silver); sh.scale.setScalar(0.22); sh.position.set(x + 0.5, 1.0, z); sh.rotation.set(-1.2, -Math.PI / 2, 0); group.add(sh);
+        ctx.solid(x, z, 0.8, 0.8, 1.2); },
       crucifix(x, y, z, s = 1, ry = 0) { // wooden cross with a carved corpus, head bowed
         const g = M4(x, y, z, ry, s); const b1 = new THREE.BoxGeometry(0.22, 4.2, 0.14); b1.translate(0, 2.1, 0); b1.applyMatrix4(g); wuv(b1, 1.2); B.addGeo(b1, M.darkwood); const b2 = new THREE.BoxGeometry(2.3, 0.2, 0.14); b2.translate(0, 3.15, 0); b2.applyMatrix4(g); wuv(b2, 1.2); B.addGeo(b2, M.darkwood);
         const pl = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.16), new THREE.MeshStandardMaterial({ map: self._pq || (self._pq = plaqueTex()), roughness: 0.8 })); pl.position.set(0, 3.68, 0.08); const cg = new THREE.Group(); cg.add(pl);
@@ -196,28 +242,8 @@ export class Interiors {
     const lc = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.2, 0.2, 14, 1, true), new THREE.MeshStandardMaterial({ color: 0xf0e8d8, roughness: 0.9, side: THREE.DoubleSide })); h.updateMatrixWorld(true); const pp = V3().setFromMatrixPosition(b.pelvis.matrixWorld); const lcg = new THREE.Group(); lcg.add(lc); lcg.position.copy(pp).add(V3(0, -0.06, 0.0)); lcg.scale.set(1, 1, 0.75); h.add(lcg); b.pelvis.attach(lcg);
     h.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } }); return h;
   }
-  statue(kind) {
-    const A = this.G.A; const stone = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.55, metalness: 0.0 });
-    if (kind === 'mary') {
-      const h = makeHuman(A, { sex: 'f', outfit: 'Ranger', hair: ['Hair_Long'], hairTint: 0x4a3020 }); const ud = h.userData;
-      const blue = stone(0x2a4a8e), cream = stone(0xeee4d0), skin = stone(0xe8d4bc);
-      h.traverse(o => { if (!o.isMesh || !o.material) return; const n = o.name; if (/Eye/.test(o.material.name)) return; o.material = /Hood|Body|Acc|Pauldron/.test(n) ? blue : /Hair|brow/i.test(o.material.name) ? stone(0x4a3020) : /Regular|hero|Retopology|Arms_2/i.test(n + o.material.name) ? skin : cream; });
-      this.pose(h, 'Idle_Loop', 0.2); const b = ud.bones; h.updateMatrixWorld(true);
-      this.aim(b.lowerarm_l, V3(0.5, -0.35, 0.8)); this.aim(b.lowerarm_r, V3(-0.5, -0.35, 0.8)); this.turn(b.Head, V3(1, 0, 0), 0.2);
-      const halo = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.012, 6, 28), this.M.gold); halo.position.set(0, 0.16, -0.1); b.Head.add(halo); halo.scale.setScalar(1 / Math.max(1e-3, b.Head.getWorldScale(V3()).x));
-      for (let i = 0; i < 12; i++) { const st = new THREE.Mesh(new THREE.OctahedronGeometry(0.018), this.M.gold); const a = i / 12 * 6.283; st.position.set(Math.cos(a) * 0.17, Math.sin(a) * 0.17, 0); halo.add(st); }
-      h.traverse(o => { if (o.isMesh) o.castShadow = true; }); return h;
-    }
-    // St James the Greater as pilgrim: hat with scallop, staff with gourd, brown cloak
-    const h = makeHuman(A, { sex: 'm', outfit: 'Ranger', hair: ['Hair_Long', 'Hair_Beard'], hairTint: 0x3a2818 }); const ud = h.userData, b = ud.bones;
-    const cloak = stone(0x6a4a2e), tunic = stone(0x8a2a24), skin = stone(0xe0c8a8);
-    h.traverse(o => { if (!o.isMesh || !o.material) return; const n = o.name; if (/Eye/.test(o.material.name)) return; o.material = /Hood/.test(n) ? cloak : /Body|Acc|Pauldron/.test(n) ? cloak : /Hair|brow/i.test(o.material.name) ? stone(0x3a2818) : /Regular|hero|Retopology|Arms_2/i.test(n + o.material.name) ? skin : tunic; if (/Hood/.test(n)) o.visible = false; });
-    this.pose(h, 'Idle_Loop', 0.2); h.updateMatrixWorld(true);
-    const hat = makeHat('pilgrim_hat'); hat.traverse(o => { if (o.isMesh) o.material = o.material.color && o.material.color.r > 0.8 ? o.material : stone(0x4a3626); }); hat.position.set(0, 0.2, 0.01); b.Head.add(hat);
-    const st = makeWeapon('st_james_staff'); attachWeapon(b.hand_r, st);
-    const halo = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.012, 6, 28), this.M.gold); halo.position.set(0, 0.2, -0.14); b.Head.add(halo);
-    h.traverse(o => { if (o.isMesh) o.castShadow = true; }); return h;
-  }
+  statue(kind) { // static polychrome statues (built from solids, not character models)
+    const g = kind === 'mary' ? statueMary() : statueJames(); g.traverse(o => { if (o.isMesh) o.castShadow = true; }); return g; }
   npc(R, def) { const G = this.G; const d = { ...def, x: R.O.x + def.x, z: R.O.z + def.z }; const n = new NPC(G, d); n.interior = R.id; G.npcs.push(n); R.npcs.push(n); return n; }
 }
 
@@ -252,42 +278,43 @@ function buildCathedral(c, R, M, id, I) {
   const { Hs, ph } = churchCommon(c, R, M, I, { W, D, H, colZ, winZ, platZ, big: true });
   // altar
   const az = -16.2; c.box(3.2, 1.0, 1.15, 0, ph, az, M.stone, 0, 1.4); c.box(3.42, 0.05, 1.3, 0, ph + 1.0, az, M.linen, 0, 1); c.box(3.42, 0.55, 0.02, 0, ph + 0.5, az + 0.66, M.linen, 0, 1); c.box(3.42, 0.08, 0.025, 0, ph + 0.5, az + 0.665, M.gold, 0, 1); c.box(0.5, 0.5, 0.025, 0, ph + 0.52, az + 0.675, M.gold, 0, 1);
-  c.solid(0, az, 1.75, 0.7, 3); for (const x of [-1.3, -0.85, -0.45, 0.45, 0.85, 1.3]) c.candlestick(x, ph + 1.03, az - 0.4, 1.1); c.light(0, ph + 1.8, az, 9, 0xffb060);
-  // tabernacle on a gilded pedestal and the sanctuary lamp
-  c.box(1.4, 1.2, 0.9, 0, ph, -18.6, M.stone, 0, 1.4); c.box(1.5, 0.08, 1.0, 0, ph + 1.2, -18.6, M.gold, 0, 1); c.tabernacle(0, ph + 1.28, -18.6, 1.1); c.solid(0, -18.6, 0.75, 0.5, 4); c.sanctuaryLamp(1.6, ph + 2.4, -17.6);
-  // gilded retablo against the apse with St James in the central niche
-  const rz = -19.75; c.box(10, 0.5, 0.5, 0, ph + 2.4, rz, M.gold, 0, 1); c.box(10.4, 0.5, 0.7, 0, ph + 9.8, rz, M.gold, 0, 1); for (const x of [-4.8, -2.2, 2.2, 4.8]) { const g = new THREE.CylinderGeometry(0.22, 0.22, 7.0, 12); g.translate(x, ph + 6.3, rz + 0.15); c.geo(g, M.gold); }
-  for (const [x, w] of [[-3.5, 2.2], [0, 4.0], [3.5, 2.2]]) c.box(w, 7.0, 0.1, x, ph + 2.9, rz - 0.18, M.crimson, 0, 1); c.box(2.4, 0.18, 0.9, 0, ph + 4.1, rz + 0.3, M.gold, 0, 1);
-  c.statue('james', 0, ph + 4.28, rz + 0.35, 0, 1.25);
-  for (const x of [-3.5, 3.5]) { c.box(1.2, 0.12, 0.6, x, ph + 4.0, rz + 0.25, M.gold, 0, 1); c.candlestick(x - 0.3, ph + 4.12, rz + 0.3, 1.0); c.candlestick(x + 0.3, ph + 4.12, rz + 0.3, 1.0); }
-  // crucifix hanging above the altar
-  const cr = c.crucifix(0, ph + 4.6, az + 0.2, 1.05); for (const s of [-1, 1]) { const ch = new THREE.CylinderGeometry(0.01, 0.01, H, 4); ch.translate(s * 1.05, ph + 4.6 + 3.3 + H / 2, az + 0.2); c.geo(ch, M.iron); }
-  // altar rail with kneeling place
-  for (const s of [-1, 1]) { const x0 = s * 1.1, x1 = s * 6.0; const cx2 = (x0 + x1) / 2, L = Math.abs(x1 - x0); c.box(L, 0.08, 0.2, cx2, 0.9, platZ + 0.85, M.stone, 0, 1.4); c.box(L, 0.12, 0.3, cx2, 0, platZ + 0.85, M.stone, 0, 1.4); for (let x = Math.min(x0, x1) + 0.15; x < Math.max(x0, x1); x += 0.3) { const g = new THREE.LatheGeometry([[0, 0], [0.06, 0], [0.04, 0.2], [0.07, 0.4], [0.035, 0.65], [0.05, 0.78], [0, 0.78]].map(p => new THREE.Vector2(p[0], p[1])), 8); g.translate(x, 0.12, platZ + 0.85); c.geo(g, M.stone); } c.solid(cx2, platZ + 0.85, L / 2, 0.18, 1.2); c.box(L, 0.12, 0.32, cx2, 0, platZ + 1.25, M.crimson, 0, 1); }
+  c.solid(0, az, 1.75, 0.7, 3);
+  // tabernacle on the altar between six altar candles; red sanctuary lamp on a wall bracket nearby
+  c.tabernacle(0, ph + 1.05, az - 0.24, 1.0); (R.sacred = R.sacred || []).push({ name: 'tabernacle', x: 0, y: ph + 1.05, z: az - 0.24, r: 0.45, h: 1.35 });
+  for (const x of [-1.4, -1.0, -0.62, 0.62, 1.0, 1.4]) c.candlestick(x, ph + 1.03, az - 0.3, 1.1); c.light(0, ph + 1.8, az, 9, 0xffb060);
+  c.sanctuaryLamp(W / 2, ph + 3.2, -16.6, -1);
+  // gilded Baroque retablo: the crucifix in the centre, Our Lady (left) and St James the pilgrim (right) in shell-headed niches
+  const rb = c.retablo(-D / 2 + 0.1, 10, 6.6, ph, 1.3);
+  const cr = c.crucifix(0, rb.y0 + rb.ph + 0.35, rb.centre.z + 0.1, 1.0); R.sacred.push({ name: 'crucifix', obj: cr });
+  R.sacred.push({ name: 'mary', obj: c.statue('mary', rb.left.x, rb.left.y, rb.left.z, 0, 1.75) }, { name: 'james', obj: c.statue('james', rb.right.x, rb.right.y, rb.right.z, 0, 1.75) });
+  for (const x of [-3.5, 3.5]) { c.candlestick(x - 0.5, rb.y0 + rb.ph + 0.08, rb.centre.z + 0.4, 1.0); c.candlestick(x + 0.5, rb.y0 + rb.ph + 0.08, rb.centre.z + 0.4, 1.0); }
+  // altar rail with kneeling step
+  c.rails(platZ + 0.85, 1.1, 6.0);
   c.interact({ type: 'kneel', key: 'cathedral', x: 0, z: platZ + 1.7, r: 1.8, label: 'Kneel before the altar — pray', short: 'Pray', face: Math.PI });
   // flanking candle stands
   for (const s of [-1, 1]) { const g = new THREE.LatheGeometry([[0, 0], [0.25, 0], [0.22, 0.06], [0.06, 0.15], [0.05, 1.5], [0.12, 1.55], [0.14, 1.62], [0, 1.62]].map(p => new THREE.Vector2(p[0], p[1])), 12); g.translate(s * 2.5, ph, -15.2); c.geo(g, M.gold); c.candle(s * 2.5, ph + 1.62, -15.2, 0.6, 0.05); c.solid(s * 2.5, -15.2, 0.3, 0.3, 3); }
   // pews
   c.pews(1.2, 4.6, 9.5, -8.5, 1.3);
   // Our Lady's side chapel (left), with votive candles and a kneeler
-  c.pedestal(-7.15, -1, 1.2, 0.85); c.statue('mary', -7.15, 1.2, -1, Math.PI / 2, 1.18); const vf = c.votive(-6.4, 1.3, Math.PI / 2, 3, 6); c.kneeler(-5.4, -1, Math.PI / 2 * -1 + Math.PI);
+  c.pedestal(-7.15, -1, 1.2, 0.85); c.statue('mary', -7.15, 1.2, -1, Math.PI / 2, 1.55); const vf = c.votive(-6.4, 1.3, Math.PI / 2, 3, 6); c.kneeler(-5.4, -1, Math.PI / 2 * -1 + Math.PI);
   c.light(-6.4, 1.2, 1.3, 4, 0xffa040); c.light(-7.0, 3.2, -1, 3.5, 0xffd8a0);
   c.interact({ type: 'kneel', key: 'mary', x: -4.8, z: -1, r: 1.5, label: 'Kneel before Our Lady — pray', short: 'Pray', face: -Math.PI / 2 });
   c.interact({ type: 'votive', x: -5.7, z: 1.3, r: 1.3, label: 'Light a votive candle (1 coin)', short: 'Candle', flames: vf });
   // confessional (left, near the door)
   confessional(c, M, -7.35, 11, Math.PI / 2); c.interact({ type: 'confess', x: -6.0, z: 11, r: 1.5, label: 'Confessional — make a confession', short: 'Confess' });
-  // holy water fonts by the door
-  c.font(-2.6, 17.8); c.font(2.6, 17.8); c.interact({ type: 'church', x: 2.6, z: 17.0, r: 1.5, label: 'Holy water font — bless water', short: 'Bless' }); c.interact({ type: 'church', x: -2.6, z: 17.0, r: 1.5, label: 'Holy water font — bless water', short: 'Bless' });
+  // holy water stoups by the door; baptismal font near the entrance; Stations of the Cross along the aisles
+  c.font(-2.6, 17.8); c.font(2.6, 17.8); for (const fx of [2.6, -2.6]) c.interact({ type: 'font', x: fx, z: 17.0, r: 1.5, label: 'Holy water — make the Sign of the Cross', short: 'Bless self' });
+  c.baptismal(5.3, 15.4); c.interact({ type: 'baptism', x: 4.2, z: 14.6, r: 1.4, label: 'Baptismal font — renew your baptismal promises', short: 'Pray' });
+  c.stations([...[-8.6, -6.0, -3.4, 3.4, 5.6, 7.8, 13.8].map(z => [-W / 2 + 0.03, z, Math.PI / 2]), ...[13.6, 11.2, 8.8, 6.2, 3.4, -2.4, -7.8].map(z => [W / 2 - 0.03, z, -Math.PI / 2])], 1.75);
   // chandeliers + banners
   for (const z of [6, -4]) { c.chandelier(0, 7.5, z, 1.2, 10); c.light(0, 7.2, z, 10, 0xffb060); }
-  // Botafumeiro: the great censer, swinging slowly across the nave
-  const bot = new THREE.Group(); const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 8.5, 5), new THREE.MeshStandardMaterial({ color: 0xc8b090, roughness: 1 })); rope.position.y = -4.25; bot.add(rope);
-  const cen = new THREE.Mesh(new THREE.LatheGeometry([[0, 0], [0.12, 0.02], [0.3, 0.2], [0.34, 0.45], [0.26, 0.7], [0.12, 0.85], [0.05, 0.95], [0, 0.95]].map(p => new THREE.Vector2(p[0], p[1])), 16), M.silver); cen.position.y = -9.4; bot.add(cen); bot.position.set(0, H - 0.6, -10.6); c.add(bot);
-  R.updaters.push((dt, t) => { bot.rotation.x = Math.sin(t * 0.55) * 0.42; });
+  // Botafumeiro: the great silver censer, hanging still and high in the crossing, clear of everything
+  { const bot = new THREE.Group(); const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 5.2, 5), new THREE.MeshStandardMaterial({ color: 0xc8b090, roughness: 1 })); rope.position.y = -2.6; bot.add(rope);
+    const cen = new THREE.Mesh(new THREE.LatheGeometry([[0, 0], [0.12, 0.02], [0.3, 0.2], [0.34, 0.45], [0.26, 0.7], [0.12, 0.85], [0.05, 0.95], [0, 0.95]].map(p => new THREE.Vector2(p[0], p[1])), 16), M.silver); cen.position.y = -6.15; bot.add(cen); bot.position.set(0, H - 0.6, -10.6); c.add(bot); (R.hangers = R.hangers || []).push(cen); }
   // pilgrims at prayer
   const pil = [[2.6, 2.75, 0x5a4a3a, 'm'], [-3.0, -1.15, 0x3a4a5a, 'f'], [3.4, -5.05, 0x6a5040, 'm']];
-  pil.forEach(([x, z, cl, sx], i) => I.npc(R, { id: 'cat_pil' + i, name: 'Pilgrim', x, z, yaw: Math.PI, idle: 'sit', yOff: 0.06, look: { sex: sx, outfit: 'Peasant', hair: sx === 'f' ? ['Hair_Long'] : ['Hair_SimpleParted', 'Hair_Beard'], tints: { cloth: cl } }, talk: G => ({ t: ['(whispers) We walked from León. I have no words left — only thanks.', '(quietly) Light a candle for my mother, if you can.', '(smiles) The Botafumeiro! I never thought I would see it.'][i], c: [{ t: 'Peace be with you.' }] }) }));
-  I.npc(R, { id: 'cat_sacristan', name: 'Sacristan', x: -6.0, z: 2.6, yaw: Math.PI / 2 * -1, idle: 'fold', look: { sex: 'm', outfit: 'Ranger', hair: ['Hair_Buzzed'], tints: { cloth: 0x1a1a1e } }, extra: o => o.traverse(m => { if (m.isMesh && /Hood/.test(m.name)) m.visible = false; }), talk: G => ({ t: "Welcome, pilgrim. Kneel at the rail when you are ready — the Apostle has waited for you. The confessional is open by the door.", c: [{ t: 'Thank you.' }] }) });
+  pil.forEach(([x, z, cl, sx], i) => I.npc(R, { id: 'cat_pil' + i, name: 'Pilgrim', x, z, yaw: Math.PI, idle: 'sit', yOff: 0.06, look: { sex: sx, outfit: 'Peasant', hair: sx === 'f' ? ['Hair_Long'] : ['Hair_SimpleParted', 'Hair_Beard'], tints: { cloth: cl } }, talk: G => ({ t: ['(whispers) We walked from León. I have no words left — only thanks.', '(quietly) Light a candle for my mother, if you can.', '(smiles) The Botafumeiro! They swing it at the Pilgrims\' Mass — I hope to see it.'][i], c: [{ t: 'Peace be with you.' }] }) }));
+  I.npc(R, { id: 'cat_sacristan', name: 'Sacristan', x: -6.0, z: 2.6, yaw: Math.PI / 2 * -1, idle: 'fold', look: { sex: 'm', outfit: 'Ranger', hair: ['Hair_Buzzed'], tints: { cloth: 0x1a1a1e } }, extra: o => o.traverse(m => { if (m.isMesh && /Hood/.test(m.name)) m.visible = false; }), talk: G => ({ t: "Welcome, pilgrim. Kneel at the rail when you are ready — the Apostle has waited for you. Confessions are heard by the door, and the Pilgrims' Mass is at noon.", c: [{ t: 'Thank you.' }] }) });
   R.hint = 'Inside the Cathedral: kneel at the altar rail to pray.';
   R.fog = [0x2a2018, 24, 110]; R.exposure = 1.0;
 }
@@ -296,20 +323,24 @@ function buildChurch(c, R, M, id, I) {
   const W = 10, D = 22, H = 9.2; const colZ = [6.5, 1.5, -3.5], winZ = [4, -1, -6]; const platZ = -7.4;
   const { Hs, ph } = churchCommon(c, R, M, I, { W, D, H, colZ, winZ, platZ, big: false });
   const az = -9.0; c.box(2.4, 0.98, 1.0, 0, ph, az, M.stone, 0, 1.4); c.box(2.6, 0.05, 1.12, 0, ph + 0.98, az, M.linen, 0, 1); c.box(2.6, 0.5, 0.02, 0, ph + 0.48, az + 0.57, M.linen, 0, 1); c.box(0.36, 0.36, 0.025, 0, ph + 0.55, az + 0.585, M.gold, 0, 1); c.solid(0, az, 1.3, 0.6, 3);
-  for (const x of [-0.9, -0.5, 0.5, 0.9]) c.candlestick(x, ph + 1.01, az - 0.3, 1.0); c.light(0, ph + 1.7, az + 0.3, 7, 0xffb060);
-  c.box(1.2, 1.1, 0.6, 0, ph, -10.6, M.stone, 0, 1.4); c.tabernacle(0, ph + 1.1, -10.6, 0.9); c.solid(0, -10.6, 0.65, 0.35, 3); c.sanctuaryLamp(1.3, ph + 2.0, -10.0);
-  c.crucifix(0, ph + 2.15, -10.92, 0.95);
-  // statues on pedestals either side of the sanctuary
-  c.pedestal(-3.8, -6.3, 1.0, 0.75); c.statue('mary', -3.8, 1.0, -6.3, 0.35, 1.1); c.pedestal(3.8, -6.3, 1.0, 0.75); c.statue('james', 3.8, 1.0, -6.3, -0.35, 1.1);
+  c.tabernacle(0, ph + 1.03, az - 0.2, 0.8); (R.sacred = R.sacred || []).push({ name: 'tabernacle', x: 0, y: ph + 1.03, z: az - 0.2, r: 0.36, h: 1.1 });
+  for (const x of [-0.95, -0.62, 0.62, 0.95]) c.candlestick(x, ph + 1.01, az - 0.25, 1.0); c.light(0, ph + 1.7, az + 0.3, 7, 0xffb060);
+  c.sanctuaryLamp(W / 2, ph + 2.6, -9.6, -1);
+  // gilded retablo: crucifix in the centre, Our Lady (left) and St James the pilgrim (right)
+  const rb = c.retablo(-D / 2 + 0.05, 7, 3.9, ph, 0.95);
+  R.sacred.push({ name: 'crucifix', obj: c.crucifix(0, rb.y0 + rb.ph + 0.25, rb.centre.z + 0.1, 0.8) });
+  R.sacred.push({ name: 'mary', obj: c.statue('mary', rb.left.x, rb.left.y, rb.left.z, 0, 1.2) }, { name: 'james', obj: c.statue('james', rb.right.x, rb.right.y, rb.right.z, 0, 1.2) });
+  c.rails(platZ + 0.85, 0.65, 4.3);
   const vf = c.votive(-4.3, -4.7, Math.PI / 2, 3, 5); c.light(-4.0, 1.4, -4.7, 4, 0xffa040);
-  c.kneeler(0, -5.9, 0); c.interact({ type: 'kneel', key: 'church_vf', x: 0, z: -5.2, r: 1.5, label: 'Kneel and pray', short: 'Pray', face: Math.PI });
+  c.interact({ type: 'kneel', key: 'church_vf', x: 0, z: -5.6, r: 1.5, label: 'Kneel at the altar rail — pray', short: 'Pray', face: Math.PI });
   c.interact({ type: 'votive', x: -3.6, z: -4.7, r: 1.2, label: 'Light a votive candle (1 coin)', short: 'Candle', flames: vf });
   c.pews(0.9, 3.4, 5.0, -3.6, 1.3);
   confessional(c, M, -4.45, 8.2, Math.PI / 2); c.interact({ type: 'confess', x: -3.2, z: 8.2, r: 1.4, label: 'Confessional — make a confession', short: 'Confess' });
-  c.font(2.4, 9.6); c.interact({ type: 'church', x: 2.4, z: 8.9, r: 1.4, label: 'Holy water font — bless water', short: 'Bless' });
+  c.font(2.4, 9.6); c.interact({ type: 'font', x: 2.4, z: 8.9, r: 1.4, label: 'Holy water — make the Sign of the Cross', short: 'Bless self' });
+  c.stations([...[-5.9, -2.5, -0.6, 2.7, 4.1, 5.5, 10.2].map(z => [-W / 2 + 0.03, z, Math.PI / 2]), ...[10.2, 8.4, 5.4, 2.7, -0.6, -2.5, -5.9].map(z => [W / 2 - 0.03, z, -Math.PI / 2])], 1.5);
   c.chandelier(0, 5.2, 1.5, 0.8, 8); c.light(0, 5.0, 1.5, 8, 0xffb060);
   I.npc(R, { id: 'vf_pil0', name: 'Old woman', x: -2.0, z: 1.15, yaw: Math.PI, idle: 'sit', yOff: 0.06, look: { sex: 'f', outfit: 'Peasant', hair: ['Hair_Buns'], tints: { cloth: 0x2a2a30 } }, talk: G => ({ t: '(softly) Every morning for sixty years. He listens, you know.', c: [{ t: 'God bless you.' }] }) });
-  R.hint = 'Villafranca Church: kneel to pray, confess, or bless water at the font.';
+  R.hint = 'Villafranca Church: kneel at the altar rail to pray, or make your confession.';
   R.fog = [0x2a2018, 16, 60]; R.exposure = 1.0;
 }
 
