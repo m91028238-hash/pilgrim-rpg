@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { GLTFLoader } from '../vendor/addons/loaders/GLTFLoader.js?v=6';
-import { RGBELoader } from '../vendor/addons/loaders/RGBELoader.js?v=6';
-import { MeshoptDecoder } from '../vendor/addons/libs/meshopt_decoder.module.js?v=6';
+import { GLTFLoader } from '../vendor/addons/loaders/GLTFLoader.js?v=7';
+import { RGBELoader } from '../vendor/addons/loaders/RGBELoader.js?v=7';
+import { MeshoptDecoder } from '../vendor/addons/libs/meshopt_decoder.module.js?v=7';
 
-export const V = 6; // asset cache-bust
+export const V = 7; // asset cache-bust
 const MANIFEST = [
   ['human_m', 'assets/human_m.glb', 1.5], ['human_f', 'assets/human_f.glb', 1.4], ['anims', 'assets/anims.glb', 1.1],
   ['village', 'assets/village.glb', 1.2], ['nature', 'assets/nature.glb', 1.6], ['wolf', 'assets/wolf.glb', 0.3],

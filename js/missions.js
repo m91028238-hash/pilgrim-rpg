@@ -1,9 +1,9 @@
 // v5 structured missions: giver -> objective steps (each with a place on the map) -> reward.
 // Every step resolves to a world position, so the tracker line, the 3D beacon, the edge arrow and the minimap pin always know where to point.
 import * as THREE from 'three';
-import { Enemy, NPC } from './actors.js?v=6';
-import { heightAt } from './world.js?v=6';
-import { ITEMS } from './data.js?v=6';
+import { Enemy, NPC } from './actors.js?v=7';
+import { heightAt } from './world.js?v=7';
+import { ITEMS } from './data.js?v=7';
 
 const P = (x, z) => [x, z];
 // k: goto | talk | fetch | kill | pickup | escort | votive | kneel | shrine | return

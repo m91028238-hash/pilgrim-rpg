@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ITEMS } from './data.js?v=6';
+import { ITEMS } from './data.js?v=7';
 // Procedural, attachable pilgrim gear. Visible tiers by rarity.
 const RCOL = { common: 0x6b4a2e, uncommon: 0x4f3520, rare: 0x3a3f46, epic: 0x6a5a8a, legendary: 0xd8b25a, blessed: 0xe8d6a0 };
 const HAT = { common: 0x7a6a50, uncommon: 0x5a4430, rare: 0x3b2c22, epic: 0x40304a, legendary: 0x2a2018, blessed: 0x6a5236 };

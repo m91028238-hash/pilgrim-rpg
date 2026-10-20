@@ -1,23 +1,24 @@
 import * as THREE from 'three';
-import './post.js?v=6';
-import { makeComposer } from './post.js?v=6';
-import { Sky } from '../vendor/addons/objects/Sky.js?v=6';
-import { loadAll } from './assets.js?v=6';
-import { PRAYERS, MYSTERIES, MYSTERY_DAY } from './prayers.js?v=6';
-import { buildWorld, PLACES, heightAt, splatAt, WATER, PATH, RIVER } from './world.js?v=6';
-import { Colliders } from './physics.js?v=6';
-import { Player, Enemy, NPC, Critter, groundY } from './actors.js?v=6';
-import { Interiors, IX } from './interiors.js?v=6';
-import { chimneySmoke, Birds, tickFx } from './fx.js?v=6';
-import { makeHat, makeWeapon, attachWeapon } from './gear.js?v=6';
-import { NPC_DEFS } from './npcs.js?v=6';
-import { Missions, MISSION_NPCS } from './missions.js?v=6';
-import { UI } from './ui.js?v=6';
-import { Audio } from './audio.js?v=6';
-import { ITEMS, SKILLS, RECIPES, MAIN_QUEST, SIDE_TEMPLATES, ENEMY_TYPES } from './data.js?v=6';
-import { distToPolyline, clamp, angDiff, mulberry, hash2, sstep, lerp } from './util.js?v=6';
+import './post.js?v=7';
+import { makeComposer } from './post.js?v=7';
+import { Sky } from '../vendor/addons/objects/Sky.js?v=7';
+import { loadAll } from './assets.js?v=7';
+import { PRAYERS, MYSTERIES, MYSTERY_DAY } from './prayers.js?v=7';
+import { buildWorld, PLACES, heightAt, splatAt, WATER, PATH, RIVER } from './world.js?v=7';
+import { Colliders } from './physics.js?v=7';
+import { Player, Enemy, NPC, Critter, groundY } from './actors.js?v=7';
+import { Interiors, IX } from './interiors.js?v=7';
+import { chimneySmoke, Birds, tickFx } from './fx.js?v=7';
+import { makeHat, makeWeapon, attachWeapon } from './gear.js?v=7';
+import { NPC_DEFS } from './npcs.js?v=7';
+import { Missions, MISSION_NPCS } from './missions.js?v=7';
+import { UI } from './ui.js?v=7';
+import { Audio } from './audio.js?v=7';
+import { isOwner, ownerToast, applyOwner, ownerTick, OWNER_SAVE } from './owner.js?v=7';
+import { ITEMS, SKILLS, RECIPES, MAIN_QUEST, SIDE_TEMPLATES, ENEMY_TYPES } from './data.js?v=7';
+import { distToPolyline, clamp, angDiff, mulberry, hash2, sstep, lerp } from './util.js?v=7';
 
-const SAVE = 'pr_save_v3';
+const OWNER = isOwner(); const SAVE = OWNER ? OWNER_SAVE : 'pr_save_v3'; // owner mode keeps its own save slot
 const QUAL = [
   { level: 0, pr: 1.0, shadow: 1024, shadowR: 22, terrainSeg: 120, trees: 650, treeNear: 34, viewDist: 120, rocks: 160, grass: 400, grassDist: 18, lights: 2, aa: false, plaza: 6, birds: 10, smoke: 6, bloom: false },
   { level: 1, pr: 1.25, shadow: 1024, shadowR: 30, terrainSeg: 160, trees: 900, treeNear: 48, viewDist: 160, rocks: 260, grass: 900, grassDist: 26, lights: 3, aa: true, plaza: 9, birds: 18, smoke: 8, bloom: false },
@@ -73,7 +74,7 @@ class Game {
     this.updateSun(0); this.renderer.compile(this.scene, this.camera);
     this.state = 'title'; this.ui.showTitle(!!localStorage.getItem(SAVE), this.qLevel, { quality: v => this.setQuality(v), start: fresh => this.start(fresh) });
     this.clock = new THREE.Clock(); this.fpsAcc = [0, 0]; this.renderer.setAnimationLoop(() => this.frame());
-    window.ready = true;
+    window.ready = true; if (ownerToast()) setTimeout(() => this.ui.toast(ownerToast(), 'gold'), 300);
   }
   setQuality(v) { localStorage.setItem('pr_quality', v); if (this.state === 'play') this.save(); location.reload(); }
   // ---------------- state ----------------
@@ -82,10 +83,11 @@ class Game {
     let S = null; try { S = JSON.parse(localStorage.getItem(SAVE)); } catch (e) { }
     if (!S) { try { const o = JSON.parse(localStorage.getItem('pr_save_v1')); if (o) { S = this.fresh(); S.lvl = o.level || 1; S.coin = o.coins || 25; S.sp = o.skillPts || 0; S.skills = o.skills || {}; for (const [k, n] of Object.entries(o.inv || {})) if (ITEMS[k]) S.inv[k] = n; for (const [k, v] of Object.entries(o.equip || {})) if (v && ITEMS[v]) S.equip[k] = v; } } catch (e) { } }
     this.S = Object.assign(this.fresh(), S || {}); this.hadSave = !!S;
+    this.owner = OWNER; if (OWNER) applyOwner(this);
   }
-  save() { const S = this.S; const w = this.wpos; S.pos = { x: w.x, z: w.z }; S.yaw = this.inside ? this.inside.door.rot : this.player.yaw; localStorage.setItem(SAVE, JSON.stringify(S)); localStorage.setItem('pr_lvl', String(S.lvl)); localStorage.setItem('pr_best', String(Math.max(+localStorage.getItem('pr_best') || 0, S.lvl))); }
+  save() { const S = this.S; const w = this.wpos; S.pos = { x: w.x, z: w.z }; S.yaw = this.inside ? this.inside.door.rot : this.player.yaw; localStorage.setItem(SAVE, JSON.stringify(S)); if (this.owner || S.owner) return; /* owner scores never reach best/leaderboard */ localStorage.setItem('pr_lvl', String(S.lvl)); localStorage.setItem('pr_best', String(Math.max(+localStorage.getItem('pr_best') || 0, S.lvl))); }
   start(fresh) {
-    this.audio.init(); if (fresh) { this.S = this.fresh(); localStorage.removeItem(SAVE); this.player.dress(this.S.equip); this.player.pos.set(this.S.pos.x, groundY(this, this.S.pos.x, this.S.pos.z), this.S.pos.z); this.player.yaw = this.S.yaw; this.cam.yaw = this.S.yaw + Math.PI; for (const e of this.enemies) e.dispose(); this.enemies = []; this.spawnState = SPAWNS.map(() => ({ alive: [], timer: 0 })); }
+    this.audio.init(); if (fresh) { this.S = this.fresh(); if (this.owner) applyOwner(this); localStorage.removeItem(SAVE); this.player.dress(this.S.equip); this.player.pos.set(this.S.pos.x, groundY(this, this.S.pos.x, this.S.pos.z), this.S.pos.z); this.player.yaw = this.S.yaw; this.cam.yaw = this.S.yaw + Math.PI; for (const e of this.enemies) e.dispose(); this.enemies = []; this.spawnState = SPAWNS.map(() => ({ alive: [], timer: 0 })); }
     this.ui.hideTitle(); this.state = 'play'; this.cam.pitch = 0.26; this.cam.dist = 4.2;
     if (!isTouch) document.getElementById('keys').classList.remove('hidden');
     setTimeout(() => document.getElementById('keys').classList.add('hidden'), 12000);
@@ -93,6 +95,7 @@ class Game {
     if (!this.S.flags.hintMove) { this.S.flags.hintMove = 1; setTimeout(() => this.ui.toast(isTouch ? 'Jogging by default · tap Walk to stroll, tap Sprint to run (tap again to stop)' : 'Jogging by default · hold Shift to sprint, Z toggles walking', '', 4200), 3600); }
     setTimeout(() => this.interiors.prefetch().catch(() => { }), 6000);
     if (this.missions) { if (fresh) for (const id of Object.keys(this.missions.spawned).concat(Object.keys(this.missions.pickups), Object.keys(this.missions.followers))) this.missions.cleanup(id); this.missions.restore(); }
+    if (this.owner) document.getElementById('ownerBadge')?.classList.remove('hidden');
     this.checkHave(); this.save();
   }
   // ---------------- derived stats ----------------
@@ -105,8 +108,9 @@ class Game {
   def() { return this.eqSum('def'); }
   speedMul() { return 1 + this.skill('walker') * 0.04 + this.eqSum('speed'); }
   xpNeed() { return 60 + this.S.lvl * 45; }
-  slotsMax() { return 20 + this.skill('pack_mule') * 4 + Math.max(0, ...Object.keys(this.S.inv).filter(k => this.S.inv[k] && ITEMS[k].slots).map(k => ITEMS[k].slots)); }
+  slotsMax() { if (this.owner) return 999; return 20 + this.skill('pack_mule') * 4 + Math.max(0, ...Object.keys(this.S.inv).filter(k => this.S.inv[k] && ITEMS[k].slots).map(k => ITEMS[k].slots)); }
   slotsUsed() { return Object.values(this.S.inv).filter(n => n > 0).length; }
+  coinStr() { return this.owner ? '∞' : String(this.S.coin); }
   price(p) { return Math.max(1, Math.round(p * (1 - this.skill('haggler') * 0.05))); }
   sellPrice(id) { const base = { common: 2, uncommon: 6, rare: 18, epic: 40, legendary: 80, blessed: 60 }[ITEMS[id].r] || 2; return base; }
   get isNight() { return this.S.time < 0.23 || this.S.time > 0.77; }
@@ -532,6 +536,7 @@ class Game {
     this.combatT = Math.max(0, (this.combatT || 0) - dt); this.sprintT = Math.max(0, (this.sprintT || 0) - dt);
     if (!P.act && !P.blocking && this.sprintT <= 0) S.stamina = Math.min(this.maxSt(), S.stamina + 46 * dt); // faster regen (v4) if (P.blocking) S.stamina = Math.min(this.maxSt(), S.stamina + 6 * dt);
     if (this.combatT <= 0 && !P.dead) S.hp = Math.min(this.maxHp(), S.hp + 0.8 * dt);
+    if (this.owner) ownerTick(this);
     S.faith = Math.min(this.maxFaith(), S.faith + (0.12 + (P.speed > 1 ? this.skill('pilgrim_song') * 0.15 : 0)) * dt);
     // enemies
     this.spawner(dt); this.inCombat = false;

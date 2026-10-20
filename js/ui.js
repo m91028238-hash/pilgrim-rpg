@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { ITEMS, SKILLS, RECIPES, SHOPS, MAIN_QUEST } from './data.js?v=6';
-import { PLACES, heightAt, splatAt, PATH, RIVER } from './world.js?v=6';
+import { ITEMS, SKILLS, RECIPES, SHOPS, MAIN_QUEST } from './data.js?v=7';
+import { PLACES, heightAt, splatAt, PATH, RIVER } from './world.js?v=7';
+import { travelPlaces, fastTravel } from './owner.js?v=7';
 const $ = id => document.getElementById(id);
 const SLOTS = ['weapon', 'hat', 'cloak', 'body', 'boots', 'trinket'];
 const SLOTN = { weapon: 'Staff / weapon', hat: 'Hat', cloak: 'Cloak', body: 'Body', boots: 'Boots', trinket: 'Trinket' };
@@ -129,7 +130,7 @@ export class UI {
     $('ptabs').onclick = e => { const k = e.target.dataset.k; if (!k) return; this.tab = k; if (k !== 'shop' && k !== 'craft') this.extra = this.extra; this.sel = null; this.renderPanel(); };
     const B = $('pBody'); const h = [];
     if (tab === 'inv') {
-      h.push(`<div class="stats"><div>Attack <b>${G.atk().toFixed(0)}</b></div><div>Defence <b>${G.def().toFixed(0)}</b></div><div>Coin <b>${S.coin}</b></div><div>Pack <b>${G.slotsUsed()}/${G.slotsMax()}</b></div></div><div class="eq">`);
+      h.push(`<div class="stats"><div>Attack <b>${G.atk().toFixed(0)}</b></div><div>Defence <b>${G.def().toFixed(0)}</b></div><div>Coin <b>${G.coinStr()}</b></div><div>Pack <b>${G.slotsUsed()}/${G.slotsMax()}</b></div></div><div class="eq">`);
       for (const s of SLOTS) { const it = ITEMS[S.equip[s]]; h.push(`<div class="eqs" data-eq="${s}"><span class="ic">${it ? it.ico : '·'}</span><div><div class="sl">${SLOTN[s]}</div><div class="nm ${it ? 't-' + it.r : ''}">${it ? it.name : 'Empty'}</div></div></div>`); }
       h.push('</div><div class="grid">'); for (const [id, n] of Object.entries(S.inv)) { if (!n) continue; const it = ITEMS[id]; h.push(`<div class="slot r-${it.r} ${this.sel === id ? 'sel' : ''}" data-id="${id}">${it.ico}<small>${n > 1 ? n : ''}</small></div>`); } h.push('</div>');
       const it = ITEMS[this.sel]; h.push('<div class="info">'); if (it) { h.push(`<b class="t-${it.r}">${it.name}</b> <span class="muted">${it.r}</span><div>${it.desc}</div><div class="muted">${statLine(it)}</div>`);
@@ -161,6 +162,7 @@ export class UI {
       for (const q of S.side) h.push(`<div class="row"><div class="grow"><div>${q.name} ${q.done ? '<span class="t-uncommon">✓ ready</span>' : ''}</div><div class="muted">${q.desc} — ${q.prog}/${q.n}${q.giver ? ' · return to ' + G.giverName(q.giver) : ''}</div></div>${tb(q.uid, S.track === q.uid)}<button class="btn" data-abandon="${q.uid}">✕</button></div>`);
     } else if (tab === 'map') {
       h.push('<canvas id="mapC" width="512" height="512"></canvas><div class="muted" style="text-align:center;margin-top:6px">Gold dots: shrines · ◆ objective · <b style=\"color:#f3c95a\">!</b> new mission · <b style=\"color:#8fe08a\">?</b> report back · Yellow line: the Camino</div>');
+      if (G.owner) { this._ft = travelPlaces(G); h.push(`<h3 style="margin-top:8px">Fast travel <span class="muted" style="font-size:11px">· tap the map or a place</span></h3><div class="ftList">${this._ft.map((p, i) => `<b data-ft="${i}"><i>${p.kind}</i>${p.label}</b>`).join('')}</div>`); }
     } else if (tab === 'settings') {
       h.push(`<h3>Settings</h3><div class="row"><div class="grow">Graphics quality</div><div class="seg" id="sq">${['Low', 'Medium', 'High'].map((n, i) => `<b data-q="${i}" class="${G.qLevel === i ? 'on' : ''}">${n}</b>`).join('')}</div></div>
       <div class="row"><div class="grow">Camera sensitivity</div><input type="range" id="sens" min="0.4" max="2" step="0.1" value="${G.sens}"></div>
@@ -170,12 +172,14 @@ export class UI {
       <div class="row"><div class="grow">Save &amp; return to title</div><button class="btn" id="quit">Save</button></div>
       <div class="row"><div class="grow">Credits</div><button class="btn" id="cred">View</button></div>`);
     } else if (tab === 'shop') {
-      const sh = SHOPS[this.extra]; h.push(`<h3>${sh.name}</h3><div class="muted">Coin: <b>${S.coin}</b></div>`);
+      const sh = SHOPS[this.extra]; h.push(`<h3>${sh.name}</h3><div class="muted">Coin: <b>${G.coinStr()}</b></div>`);
       for (const s of sh.stock) { const it = ITEMS[s.id]; const p = G.price(s.price); h.push(`<div class="row"><span class="ic">${it.ico}</span><div class="grow"><div class="t-${it.r}">${it.name}</div><div class="muted">${it.desc} ${statLine(it)}</div></div><button class="btn" data-buy="${s.id}" data-p="${p}" ${S.coin >= p ? '' : 'disabled'}>${p}c</button></div>`); }
       h.push('<h3>Sell</h3>'); for (const [id, n] of Object.entries(S.inv)) { if (!n) continue; const it = ITEMS[id]; if (it.cat === 'quest') continue; const p = G.sellPrice(id); h.push(`<div class="row"><span class="ic">${it.ico}</span><div class="grow">${it.name} ×${n}</div><button class="btn" data-sell="${id}">${p}c</button></div>`); }
     }
     B.innerHTML = h.join('');
-    if (tab === 'map') this.drawBigMap($('mapC'));
+    if (tab === 'map') { const c = $('mapC'); this.drawBigMap(c);
+      if (G.owner) { c.classList.add('ft'); c.onclick = e => { const r = c.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width * 600 - 300, z = (e.clientY - r.top) / r.height * 600 - 300; e.stopPropagation(); fastTravel(G, x, z); };
+        B.querySelector('.ftList').onclick = e => { const b = e.target.closest('[data-ft]'); if (!b) return; e.stopPropagation(); const p = this._ft[+b.dataset.ft]; fastTravel(G, p.x, p.z, p.label); }; } }
     B.onclick = e => this.panelClick(e);
     const sq = $('sq'); if (sq) sq.onclick = e => { const v = e.target.dataset.q; if (v != null) { G.setQuality(+v); this.renderPanel(); } };
     const sens = $('sens'); if (sens) sens.oninput = () => { G.sens = +sens.value; localStorage.setItem('pr_sens', G.sens); };

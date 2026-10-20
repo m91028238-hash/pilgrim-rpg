@@ -25,8 +25,8 @@ const GradeShader = {
 /** Build the High-quality composer (lazy import keeps Low/Medium downloads lean) */
 export async function makeComposer(renderer, scene, camera) {
   const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }, { ShaderPass }] = await Promise.all([
-    import('../vendor/addons/postprocessing/EffectComposer.js?v=6'), import('../vendor/addons/postprocessing/RenderPass.js?v=6'), import('../vendor/addons/postprocessing/UnrealBloomPass.js?v=6'),
-    import('../vendor/addons/postprocessing/OutputPass.js?v=6'), import('../vendor/addons/postprocessing/ShaderPass.js?v=6')]);
+    import('../vendor/addons/postprocessing/EffectComposer.js?v=7'), import('../vendor/addons/postprocessing/RenderPass.js?v=7'), import('../vendor/addons/postprocessing/UnrealBloomPass.js?v=7'),
+    import('../vendor/addons/postprocessing/OutputPass.js?v=7'), import('../vendor/addons/postprocessing/ShaderPass.js?v=7')]);
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
   const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
   const comp = new EffectComposer(renderer, rt);

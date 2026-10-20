@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { clone as skClone } from '../vendor/addons/utils/SkeletonUtils.js?v=6';
-import { makeHuman, Animator, prayPose } from './human.js?v=6';
-import { dressReligious } from './sacred.js?v=6';
-import { dressPilgrim, makeWeapon, attachWeapon, setGrip } from './gear.js?v=6';
-import { heightAt, WATER } from './world.js?v=6';
-import { ENEMY_TYPES, ITEMS } from './data.js?v=6';
-import { angDiff, clamp, lerp } from './util.js?v=6';
+import { clone as skClone } from '../vendor/addons/utils/SkeletonUtils.js?v=7';
+import { makeHuman, Animator, prayPose } from './human.js?v=7';
+import { dressReligious } from './sacred.js?v=7';
+import { dressPilgrim, makeWeapon, attachWeapon, setGrip } from './gear.js?v=7';
+import { heightAt, WATER } from './world.js?v=7';
+import { ENEMY_TYPES, ITEMS } from './data.js?v=7';
+import { angDiff, clamp, lerp } from './util.js?v=7';
 
 const HUMAN_MAP = { idle: 'Idle_Loop', walk: 'Walk_Loop', jog: 'Jog_Fwd_Loop', sprint: 'Sprint_Loop', a1: 'Sword_Regular_A', a2: 'Sword_Regular_B', a3: 'Sword_Regular_C', heavy: 'Sword_Attack', block: 'Sword_Block', roll: 'Roll', hit: 'Hit_Chest', kb: 'Hit_Knockback', death: 'Death01', pray: 'Idle_Loop', kneel: 'Idle_Loop', cast: 'Spell_Simple_Shoot', gather: 'Farm_Harvest', pick: 'PickUp_Table', chest: 'Chest_Open', eat: 'Consume', talk: 'Idle_Talking_Loop', ready: 'Sword_Idle', prayidle: 'Idle_Loop', sit: 'Sitting_Idle_Loop', fold: 'Idle_FoldArms_Loop', zwalk: 'Zombie_Walk_Fwd_Loop', zidle: 'Zombie_Idle_Loop', zatk: 'Zombie_Scratch', punch: 'Punch_Jab', chop: 'TreeChopping_Loop', yes: 'Yes', lantern: 'Idle_Lantern_Loop', formal: 'Walk_Formal_Loop' };
 export function groundY(G, x, z) { if (x > 900) return Math.max(0, G.col.surfaceAt(x, z)); return Math.max(heightAt(x, z), G.col.surfaceAt(x, z), WATER - 0.75); }
@@ -57,7 +57,7 @@ export class Player {
       if (S.stamina > 0) { G.audio.block(); dmg *= 1 - red; G.fx.spark(this.pos.x + Math.sin(this.yaw) * 0.6, this.pos.y + 1.2, this.pos.z + Math.cos(this.yaw) * 0.6, 0xffd080, 6); }
       else { S.stamina = 0; this.blocking = false; heavy = true; G.ui.toast('Guard broken'); }
     }
-    dmg = Math.max(1, dmg - G.def() * 0.35); S.hp -= dmg; G.ui.flash(); G.audio.hurt();
+    dmg = Math.max(1, dmg - G.def() * 0.35); S.hp -= dmg; if (G.owner) S.hp = Math.max(S.hp, G.maxHp() * 0.5); /* owner: no death */ G.ui.flash(); G.audio.hurt();
     const kb = heavy ? 6 : 2.5; this.vel.x = -Math.sin(ang) * kb; this.vel.z = -Math.cos(ang) * kb;
     if (S.hp <= 0) { if (G.skill('martyr') && !G.S.flags.martyrUsed) { S.hp = 1; G.S.flags.martyrUsed = true; G.ui.toast("Martyr's Resolve holds you up"); } else { this.die(); return 'dead'; } }
     if (!this.blocking || heavy) { this.act = null; this.stun = heavy ? 0.7 : 0.32; this.anim.play(heavy ? 'kb' : 'hit', { once: true, force: true, speed: heavy ? 1.3 : 1.6 }); }

@@ -1,5 +1,5 @@
 // NPC definitions and dialogue. Dialogue nodes: { t:text, c:[{t:label, f:()=>next|undefined}] }
-import { ITEMS } from './data.js?v=6';
+import { ITEMS } from './data.js?v=7';
 const M = (cloth, hair = ['Hair_SimpleParted'], outfit = 'Peasant') => ({ sex: 'm', outfit, hair, tints: { cloth } });
 const F = (cloth, hair = ['Hair_Buns'], outfit = 'Peasant') => ({ sex: 'f', outfit, hair, tints: { cloth } });
 const hoodOff = o => o.traverse(m => { if (m.isMesh && /Hood/.test(m.name)) m.visible = false; });
