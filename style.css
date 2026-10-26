@@ -118,3 +118,21 @@ body.desktop #prompt{bottom:90px}
 #ownerBadge.hidden{display:none}
 .ftList{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:8px}.ftList b{display:block;padding:6px 7px;border-radius:7px;background:rgba(255,230,160,.1);border:1px solid rgba(216,178,90,.45);font-size:12px;font-weight:normal;cursor:pointer}.ftList b i{font-style:normal;color:#d8b25a;font-size:10px;display:block}
 #mapC.ft{cursor:crosshair}
+
+/* v8 pack + gear (phone-first, 44px targets) */
+#panel button,#panel .slot,#panel .chips b,#panel .gslot,.ptabs b{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.ptabs b{min-height:44px;box-sizing:border-box;display:flex;align-items:center}
+#pClose{width:44px;height:44px}
+#panel .btn{min-height:44px;min-width:44px;padding:8px 14px}
+.btn.pri{background:rgba(216,178,90,.32);border-color:#e8c46a;color:#fff3cf}
+.slot{min-height:56px}.slot em{position:absolute;left:4px;top:2px;font:bold 10px system-ui;font-style:normal;color:#e8c46a}
+.chips{display:flex;gap:6px;overflow-x:auto;margin:8px 0;padding-bottom:2px}.chips b{flex:none;min-height:44px;box-sizing:border-box;display:flex;align-items:center;padding:0 13px;border-radius:22px;border:1px solid #d8b25a55;background:rgba(255,255,255,.05);font-weight:normal;font-size:13px;cursor:pointer}.chips b.on{background:rgba(216,178,90,.3);border-color:#e8c46a;color:#fff3cf}
+.gearLink{display:flex;width:100%;min-height:48px;align-items:center;justify-content:space-between;gap:8px;padding:6px 12px;border-radius:10px;border:1px solid #d8b25a88;background:rgba(216,178,90,.12);font-size:18px}.gearLink b{font:14px Georgia,serif;color:#e8c46a}
+#pBody.hasSheet{padding-bottom:230px}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-height:62%;overflow:auto;background:rgba(28,21,14,.98);border-top:1px solid #d8b25a99;box-shadow:0 -8px 24px #000a;padding:10px 12px calc(10px + env(safe-area-inset-bottom));border-radius:14px 14px 0 0;z-index:2}
+.shHead{display:flex;gap:10px;align-items:flex-start}.shHead .ic{font-size:30px;width:36px;text-align:center}.shHead .grow{flex:1}.shHead .x{width:44px;height:44px;border:none;background:none;font-size:18px;flex:none}
+.shBtns{display:flex;flex-wrap:wrap}
+.cmp{font-size:12px;margin-top:3px}.cmp .up{color:#7cd87c}.cmp .dn{color:#f07a6a}.cmp .dz{opacity:.6}.cmp span{margin-right:6px;white-space:nowrap}
+.gslot{display:flex;align-items:center;gap:10px;min-height:60px;padding:8px 10px;margin-bottom:6px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid #ffffff1a;cursor:pointer}.gslot.open{border-color:#e8c46a;background:rgba(216,178,90,.1)}
+.gslot .ic{font-size:26px;width:34px;text-align:center}.gslot .sl{font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.05em}.gslot .nm{font-size:14px}.gslot .muted{font-size:11px;opacity:.65}.gslot .chev{font-size:18px;color:#e8c46a;width:20px;text-align:center}
+.glist{margin:-2px 0 10px 14px;border-left:2px solid #d8b25a55;padding-left:8px}.grow2{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #ffffff12}.grow2 .ic{font-size:22px;width:30px;text-align:center}.grow2 .grow{flex:1}.grow2 .btn{margin:0}

@@ -1,22 +1,22 @@
 import * as THREE from 'three';
-import './post.js?v=7';
-import { makeComposer } from './post.js?v=7';
-import { Sky } from '../vendor/addons/objects/Sky.js?v=7';
-import { loadAll } from './assets.js?v=7';
-import { PRAYERS, MYSTERIES, MYSTERY_DAY } from './prayers.js?v=7';
-import { buildWorld, PLACES, heightAt, splatAt, WATER, PATH, RIVER } from './world.js?v=7';
-import { Colliders } from './physics.js?v=7';
-import { Player, Enemy, NPC, Critter, groundY } from './actors.js?v=7';
-import { Interiors, IX } from './interiors.js?v=7';
-import { chimneySmoke, Birds, tickFx } from './fx.js?v=7';
-import { makeHat, makeWeapon, attachWeapon } from './gear.js?v=7';
-import { NPC_DEFS } from './npcs.js?v=7';
-import { Missions, MISSION_NPCS } from './missions.js?v=7';
-import { UI } from './ui.js?v=7';
-import { Audio } from './audio.js?v=7';
-import { isOwner, ownerToast, applyOwner, ownerTick, OWNER_SAVE } from './owner.js?v=7';
-import { ITEMS, SKILLS, RECIPES, MAIN_QUEST, SIDE_TEMPLATES, ENEMY_TYPES } from './data.js?v=7';
-import { distToPolyline, clamp, angDiff, mulberry, hash2, sstep, lerp } from './util.js?v=7';
+import './post.js?v=8';
+import { makeComposer } from './post.js?v=8';
+import { Sky } from '../vendor/addons/objects/Sky.js?v=8';
+import { loadAll } from './assets.js?v=8';
+import { PRAYERS, MYSTERIES, MYSTERY_DAY } from './prayers.js?v=8';
+import { buildWorld, PLACES, heightAt, splatAt, WATER, PATH, RIVER } from './world.js?v=8';
+import { Colliders } from './physics.js?v=8';
+import { Player, Enemy, NPC, Critter, groundY } from './actors.js?v=8';
+import { Interiors, IX } from './interiors.js?v=8';
+import { chimneySmoke, Birds, tickFx } from './fx.js?v=8';
+import { makeHat, makeWeapon, attachWeapon } from './gear.js?v=8';
+import { NPC_DEFS } from './npcs.js?v=8';
+import { Missions, MISSION_NPCS } from './missions.js?v=8';
+import { UI } from './ui.js?v=8';
+import { Audio } from './audio.js?v=8';
+import { isOwner, ownerToast, applyOwner, ownerTick, OWNER_SAVE } from './owner.js?v=8';
+import { ITEMS, SKILLS, RECIPES, MAIN_QUEST, SIDE_TEMPLATES, ENEMY_TYPES } from './data.js?v=8';
+import { distToPolyline, clamp, angDiff, mulberry, hash2, sstep, lerp } from './util.js?v=8';
 
 const OWNER = isOwner(); const SAVE = OWNER ? OWNER_SAVE : 'pr_save_v3'; // owner mode keeps its own save slot
 const QUAL = [

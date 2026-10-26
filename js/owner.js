@@ -1,9 +1,9 @@
 // Private OWNER MODE (Michael only). Activated per device with ?owner=<code>, ?owner=off disables.
 // Owner play uses its own save slot (pr_save_owner) so normal saves are never touched, and the save
 // carries owner:true / leaderboard:false so any future leaderboard ignores it.
-import { ITEMS, SKILLS, RECIPES } from './data.js?v=7';
-import { PLACES, WATER, heightAt } from './world.js?v=7';
-import { groundY } from './actors.js?v=7';
+import { ITEMS, SKILLS, RECIPES } from './data.js?v=8';
+import { PLACES, WATER, heightAt } from './world.js?v=8';
+import { groundY } from './actors.js?v=8';
 
 const CODE = 'mk7731', KEY = 'pr_owner';
 export const OWNER_SAVE = 'pr_save_owner', OWNER_LVL = 50, OWNER_COIN = 999999;

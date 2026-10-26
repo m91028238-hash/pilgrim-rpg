@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { mergeGeometries } from '../vendor/addons/utils/BufferGeometryUtils.js?v=7';
-import { fbm, mulberry, distToPolyline, sstep, lerp, clamp, hash2 } from './util.js?v=7';
-import { cruceiro, statueMary } from './sacred.js?v=7';
-import { CardLayer, cardMaterial, cross2, cross3, coverCell, planBoundaries, addTreeWind, bakeTreeImpostors, impostorMaterial, wind, T as FT } from './foliage.js?v=7';
+import { mergeGeometries } from '../vendor/addons/utils/BufferGeometryUtils.js?v=8';
+import { fbm, mulberry, distToPolyline, sstep, lerp, clamp, hash2 } from './util.js?v=8';
+import { cruceiro, statueMary } from './sacred.js?v=8';
+import { CardLayer, cardMaterial, cross2, cross3, coverCell, planBoundaries, addTreeWind, bakeTreeImpostors, impostorMaterial, wind, T as FT } from './foliage.js?v=8';
 
 export const WORLD = 600, HALF = 300, WATER = -0.55;
 // Camino route (x,z). North is -z.

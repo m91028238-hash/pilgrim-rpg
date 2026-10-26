@@ -1,7 +1,7 @@
 // Foliage: alpha-card ground cover from a baked atlas, hedgerows, dry-stone walls, tree impostors and wind.
 import * as THREE from 'three';
-import { mergeGeometries } from '../vendor/addons/utils/BufferGeometryUtils.js?v=7';
-import { mulberry, fbm, hash2, distToPolyline } from './util.js?v=7';
+import { mergeGeometries } from '../vendor/addons/utils/BufferGeometryUtils.js?v=8';
+import { mulberry, fbm, hash2, distToPolyline } from './util.js?v=8';
 
 // atlas tiles (4x4): [width m, height m]
 export const TILES = [[0.9, 0.55], [1.0, 0.85], [0.9, 0.55], [0.9, 0.55], [0.9, 0.6], [0.9, 0.7], [1.0, 0.6], [1.1, 0.55], [0.8, 0.9], [1.0, 0.5], [2.2, 1.4], [2.2, 1.4], [1.2, 0.9], [0.9, 0.55], [1.0, 0.6], [1.0, 0.95]];

@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { clone as skClone } from '../vendor/addons/utils/SkeletonUtils.js?v=7';
-import { makeHuman, Animator, prayPose } from './human.js?v=7';
-import { dressReligious } from './sacred.js?v=7';
-import { dressPilgrim, makeWeapon, attachWeapon, setGrip } from './gear.js?v=7';
-import { heightAt, WATER } from './world.js?v=7';
-import { ENEMY_TYPES, ITEMS } from './data.js?v=7';
-import { angDiff, clamp, lerp } from './util.js?v=7';
+import { clone as skClone } from '../vendor/addons/utils/SkeletonUtils.js?v=8';
+import { makeHuman, Animator, prayPose } from './human.js?v=8';
+import { dressReligious } from './sacred.js?v=8';
+import { dressPilgrim, makeWeapon, attachWeapon, setGrip } from './gear.js?v=8';
+import { heightAt, WATER } from './world.js?v=8';
+import { ENEMY_TYPES, ITEMS } from './data.js?v=8';
+import { angDiff, clamp, lerp } from './util.js?v=8';
 
 const HUMAN_MAP = { idle: 'Idle_Loop', walk: 'Walk_Loop', jog: 'Jog_Fwd_Loop', sprint: 'Sprint_Loop', a1: 'Sword_Regular_A', a2: 'Sword_Regular_B', a3: 'Sword_Regular_C', heavy: 'Sword_Attack', block: 'Sword_Block', roll: 'Roll', hit: 'Hit_Chest', kb: 'Hit_Knockback', death: 'Death01', pray: 'Idle_Loop', kneel: 'Idle_Loop', cast: 'Spell_Simple_Shoot', gather: 'Farm_Harvest', pick: 'PickUp_Table', chest: 'Chest_Open', eat: 'Consume', talk: 'Idle_Talking_Loop', ready: 'Sword_Idle', prayidle: 'Idle_Loop', sit: 'Sitting_Idle_Loop', fold: 'Idle_FoldArms_Loop', zwalk: 'Zombie_Walk_Fwd_Loop', zidle: 'Zombie_Idle_Loop', zatk: 'Zombie_Scratch', punch: 'Punch_Jab', chop: 'TreeChopping_Loop', yes: 'Yes', lantern: 'Idle_Lantern_Loop', formal: 'Walk_Formal_Loop' };
 export function groundY(G, x, z) { if (x > 900) return Math.max(0, G.col.surfaceAt(x, z)); return Math.max(heightAt(x, z), G.col.surfaceAt(x, z), WATER - 0.75); }

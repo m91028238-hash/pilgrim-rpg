@@ -1,10 +1,17 @@
 import * as THREE from 'three';
-import { ITEMS, SKILLS, RECIPES, SHOPS, MAIN_QUEST } from './data.js?v=7';
-import { PLACES, heightAt, splatAt, PATH, RIVER } from './world.js?v=7';
-import { travelPlaces, fastTravel } from './owner.js?v=7';
+import { ITEMS, SKILLS, RECIPES, SHOPS, MAIN_QUEST } from './data.js?v=8';
+import { PLACES, heightAt, splatAt, PATH, RIVER } from './world.js?v=8';
+import { travelPlaces, fastTravel } from './owner.js?v=8';
 const $ = id => document.getElementById(id);
 const SLOTS = ['weapon', 'hat', 'cloak', 'body', 'boots', 'trinket'];
-const SLOTN = { weapon: 'Staff / weapon', hat: 'Hat', cloak: 'Cloak', body: 'Body', boots: 'Boots', trinket: 'Trinket' };
+const SLOTN = { weapon: 'Weapon', hat: 'Head', cloak: 'Cloak', body: 'Body armour', boots: 'Boots', trinket: 'Sacramental' };
+// v8 equipment helpers -------------------------------------------------------
+const STATK = [['atk', 'ATK', 1], ['def', 'DEF', 1], ['hpBonus', 'HP', 1], ['faithBonus', 'Faith', 1], ['demonBonus', 'vs shadows %', 1], ['speed', 'Speed %', 100], ['xpBonus', 'XP %', 100]];
+const SACRED_USE = /^(holy|candle|oil|faith|bell)$/;
+export function itemType(it) { if (!it) return 'other'; if (it.cat === 'weapon') return 'weapon'; if (it.cat === 'armour') return 'armour'; if (it.cat === 'trinket' || SACRED_USE.test(it.use || '')) return 'sacred'; if (it.cat === 'consumable') return 'consumable'; if (it.cat === 'mat') return 'material'; if (it.cat === 'quest') return 'quest'; return 'tools'; }
+const FILTERS = [['all', 'All'], ['weapon', 'Weapons'], ['armour', 'Armour'], ['consumable', 'Consumables'], ['material', 'Materials'], ['sacred', 'Sacred'], ['quest', 'Quest'], ['tools', 'Tools & bags']];
+const TORD = { weapon: 0, armour: 1, sacred: 2, consumable: 3, tools: 4, material: 5, quest: 6, other: 7 }; const RORD = ['legendary', 'blessed', 'epic', 'rare', 'uncommon', 'common'];
+function deltas(nw, cur) { const out = []; for (const [k, n, m] of STATK) { const a = (nw?.[k] || 0) * m, b = (cur?.[k] || 0) * m, d = Math.round((a - b) * 10) / 10; if (a || b) out.push(d === 0 ? `<span class="dz">${n} ${a}</span>` : `<span class="${d > 0 ? 'up' : 'dn'}">${d > 0 ? '▲' : '▼'} ${n} ${d > 0 ? '+' : ''}${d}</span>`); } return out.join(' ') || '<span class="dz">no stats</span>'; }
 const v3 = new THREE.Vector3();
 
 export class UI {
@@ -125,17 +132,34 @@ export class UI {
   openCraft(st) { this.closeDialog(); this.openPanel('craft', st); }
   renderPanel() {
     const G = this.G, S = G.S, tab = this.tab;
-    const tabs = [['inv', 'Pack'], ['craft', 'Craft'], ['skills', 'Skills'], ['quests', 'Quests'], ['map', 'Map'], ['settings', 'Settings']]; if (tab === 'shop') tabs.unshift(['shop', SHOPS[this.extra].name]);
+    const tabs = [['inv', 'Pack'], ['gear', 'Gear'], ['craft', 'Craft'], ['skills', 'Skills'], ['quests', 'Quests'], ['map', 'Map'], ['settings', 'Settings']]; if (tab === 'shop') tabs.unshift(['shop', SHOPS[this.extra].name]);
     $('ptabs').innerHTML = tabs.map(([k, n]) => `<b data-k="${k}" class="${k === tab ? 'on' : ''}">${n}</b>`).join('');
-    $('ptabs').onclick = e => { const k = e.target.dataset.k; if (!k) return; this.tab = k; if (k !== 'shop' && k !== 'craft') this.extra = this.extra; this.sel = null; this.renderPanel(); };
-    const B = $('pBody'); const h = [];
+    $('ptabs').onclick = e => { const k = e.target.dataset.k; if (!k) return; if (k !== this.tab) this.gearSlot = null; this.tab = k; if (k !== 'shop' && k !== 'craft') this.extra = this.extra; this.sel = null; this.renderPanel(); };
+    const B = $('pBody'); const h = []; const keep = this._lastTab === tab ? B.scrollTop : 0; this._lastTab = tab;
     if (tab === 'inv') {
-      h.push(`<div class="stats"><div>Attack <b>${G.atk().toFixed(0)}</b></div><div>Defence <b>${G.def().toFixed(0)}</b></div><div>Coin <b>${G.coinStr()}</b></div><div>Pack <b>${G.slotsUsed()}/${G.slotsMax()}</b></div></div><div class="eq">`);
-      for (const s of SLOTS) { const it = ITEMS[S.equip[s]]; h.push(`<div class="eqs" data-eq="${s}"><span class="ic">${it ? it.ico : '·'}</span><div><div class="sl">${SLOTN[s]}</div><div class="nm ${it ? 't-' + it.r : ''}">${it ? it.name : 'Empty'}</div></div></div>`); }
-      h.push('</div><div class="grid">'); for (const [id, n] of Object.entries(S.inv)) { if (!n) continue; const it = ITEMS[id]; h.push(`<div class="slot r-${it.r} ${this.sel === id ? 'sel' : ''}" data-id="${id}">${it.ico}<small>${n > 1 ? n : ''}</small></div>`); } h.push('</div>');
-      const it = ITEMS[this.sel]; h.push('<div class="info">'); if (it) { h.push(`<b class="t-${it.r}">${it.name}</b> <span class="muted">${it.r}</span><div>${it.desc}</div><div class="muted">${statLine(it)}</div>`);
-        if (it.slot) h.push(`<button class="btn" data-act="equip">Equip</button>`); if (it.use) h.push(`<button class="btn" data-act="use">Use</button><button class="btn" data-act="q0">Quick 1</button><button class="btn" data-act="q1">Quick 2</button>`); if (it.cat !== 'quest') h.push(`<button class="btn" data-act="drop">Drop one</button>`); }
-      else h.push('<span class="muted">Tap an item. Tap an equipped slot to remove it.</span>'); h.push('</div>');
+      const f = this.filter || 'all'; const ids = Object.keys(S.inv).filter(id => S.inv[id] > 0 && ITEMS[id] && (f === 'all' || itemType(ITEMS[id]) === f))
+        .sort((a, b) => (TORD[itemType(ITEMS[a])] - TORD[itemType(ITEMS[b])]) || (RORD.indexOf(ITEMS[a].r) - RORD.indexOf(ITEMS[b].r)) || ITEMS[a].name.localeCompare(ITEMS[b].name));
+      h.push(`<div class="stats"><div>Attack <b>${G.atk().toFixed(0)}</b></div><div>Defence <b>${G.def().toFixed(0)}</b></div><div>Coin <b>${G.coinStr()}</b></div><div>Pack <b>${G.slotsUsed()}/${G.slotsMax() > 900 ? '∞' : G.slotsMax()}</b></div></div>`);
+      h.push(`<button class="gearLink" data-gotab="gear"><span>${SLOTS.map(sl => ITEMS[S.equip[sl]]?.ico || '·').join(' ')}</span><b>Equipment ›</b></button>`);
+      h.push(`<div class="chips">${FILTERS.map(([k, n]) => `<b data-filter="${k}" class="${k === f ? 'on' : ''}">${n}</b>`).join('')}</div><div class="grid">`);
+      for (const id of ids) { const it = ITEMS[id], n = S.inv[id]; h.push(`<div class="slot r-${it.r} ${this.sel === id ? 'sel' : ''}" data-id="${id}" aria-label="${it.name}">${it.ico}<small>${n > 1 ? n : ''}</small>${it.slot && Object.values(S.equip).includes(id) ? '<em>E</em>' : ''}</div>`); }
+      h.push('</div>'); if (!ids.length) h.push('<div class="muted" style="padding:10px">Nothing of this kind in your pack.</div>');
+      const it = ITEMS[this.sel]; if (it && S.inv[this.sel]) { const cur = it.slot ? ITEMS[S.equip[it.slot]] : null; const worn = it.slot && S.equip[it.slot] === this.sel;
+        h.push(`<div class="sheet"><div class="shHead"><span class="ic">${it.ico}</span><div class="grow"><b class="t-${it.r}">${it.name}</b> <span class="muted">${it.r}${it.slot ? ' · ' + SLOTN[it.slot] : ''} · ×${S.inv[this.sel]}</span><div class="muted">${it.desc}</div>${it.slot ? `<div class="cmp">${worn ? 'Equipped' : cur ? 'vs ' + cur.name + ':' : ''} ${deltas(it, worn ? null : cur)}</div>` : `<div class="muted">${statLine(it)}</div>`}</div><button class="x" data-act="desel" aria-label="Close">✕</button></div><div class="shBtns">`);
+        if (it.slot) h.push(worn ? (it.slot !== 'weapon' ? `<button class="btn pri" data-act="unequip" data-slot="${it.slot}">Unequip</button>` : '') : `<button class="btn pri" data-act="equip">Equip</button>`);
+        if (it.use) h.push(`<button class="btn pri" data-act="use">Use</button><button class="btn" data-act="q0">Quick 1</button><button class="btn" data-act="q1">Quick 2</button>`);
+        if (it.slot) h.push(`<button class="btn" data-gotab="gear" data-slot="${it.slot}">Compare</button>`);
+        if (it.cat !== 'quest') h.push(`<button class="btn" data-act="drop">Drop one</button>`); h.push('</div></div>'); }
+    } else if (tab === 'gear') {
+      h.push(`<div class="stats"><div>Attack <b>${G.atk().toFixed(0)}</b></div><div>Defence <b>${G.def().toFixed(0)}</b></div><div>Max HP <b>${G.maxHp()}</b></div><div>Max faith <b>${G.maxFaith()}</b></div></div>`);
+      h.push('<div class="muted" style="margin:2px 0 8px">Tap a slot to choose what to wear or carry.</div>');
+      for (const sl of SLOTS) { const it = ITEMS[S.equip[sl]]; const open = this.gearSlot === sl;
+        h.push(`<div class="gslot ${open ? 'open' : ''}" data-gslot="${sl}"><span class="ic">${it ? it.ico : '·'}</span><div class="grow"><div class="sl">${SLOTN[sl]}</div><div class="nm ${it ? 't-' + it.r : 'muted'}">${it ? it.name : 'Empty'}</div><div class="muted">${it ? statLine(it) || 'no stats' : ''}</div></div><span class="chev">${open ? '▾' : '›'}</span></div>`);
+        if (open) { const own = Object.keys(S.inv).filter(id => S.inv[id] > 0 && ITEMS[id]?.slot === sl && id !== S.equip[sl]).sort((a, b) => RORD.indexOf(ITEMS[a].r) - RORD.indexOf(ITEMS[b].r));
+          h.push('<div class="glist">'); if (!own.length) h.push('<div class="muted" style="padding:8px">You carry nothing else for this slot.</div>');
+          for (const id of own) { const o = ITEMS[id]; h.push(`<div class="grow2"><span class="ic">${o.ico}</span><div class="grow"><div class="t-${o.r}">${o.name}${S.inv[id] > 1 ? ' <span class="muted">×' + S.inv[id] + '</span>' : ''}</div><div class="cmp">${deltas(o, it)}</div></div><button class="btn pri" data-gequip="${id}">Equip</button></div>`); }
+          if (it && sl !== 'weapon') h.push(`<div class="grow2"><span class="ic">·</span><div class="grow muted">Take off ${it.name}</div><button class="btn" data-act="unequip" data-slot="${sl}">Unequip</button></div>`);
+          h.push('</div>'); } }
     } else if (tab === 'craft') {
       const st = G.stationsNear(); if (this.extra && !st.includes(this.extra)) st.push(this.extra);
       h.push(`<h3>Crafting</h3><div class="muted" style="margin-bottom:6px">Available here: ${st.map(s => ({ hand: 'by hand', bench: 'workbench', campfire: 'campfire', forge: 'forge', church: 'church' })[s]).join(', ')}</div>`);
@@ -176,7 +200,8 @@ export class UI {
       for (const s of sh.stock) { const it = ITEMS[s.id]; const p = G.price(s.price); h.push(`<div class="row"><span class="ic">${it.ico}</span><div class="grow"><div class="t-${it.r}">${it.name}</div><div class="muted">${it.desc} ${statLine(it)}</div></div><button class="btn" data-buy="${s.id}" data-p="${p}" ${S.coin >= p ? '' : 'disabled'}>${p}c</button></div>`); }
       h.push('<h3>Sell</h3>'); for (const [id, n] of Object.entries(S.inv)) { if (!n) continue; const it = ITEMS[id]; if (it.cat === 'quest') continue; const p = G.sellPrice(id); h.push(`<div class="row"><span class="ic">${it.ico}</span><div class="grow">${it.name} ×${n}</div><button class="btn" data-sell="${id}">${p}c</button></div>`); }
     }
-    B.innerHTML = h.join('');
+    B.innerHTML = h.join(''); B.scrollTop = keep; B.classList.toggle('hasSheet', tab === 'inv' && !!B.querySelector('.sheet'));
+    if (tab === 'gear' && this._scrollSlot) { const el = B.querySelector(`[data-gslot="${this._scrollSlot}"]`); if (el) B.scrollTop = Math.max(0, el.offsetTop - 70); this._scrollSlot = null; }
     if (tab === 'map') { const c = $('mapC'); this.drawBigMap(c);
       if (G.owner) { c.classList.add('ft'); c.onclick = e => { const r = c.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width * 600 - 300, z = (e.clientY - r.top) / r.height * 600 - 300; e.stopPropagation(); fastTravel(G, x, z); };
         B.querySelector('.ftList').onclick = e => { const b = e.target.closest('[data-ft]'); if (!b) return; e.stopPropagation(); const p = this._ft[+b.dataset.ft]; fastTravel(G, p.x, p.z, p.label); }; } }
@@ -185,10 +210,17 @@ export class UI {
     const sens = $('sens'); if (sens) sens.oninput = () => { G.sens = +sens.value; localStorage.setItem('pr_sens', G.sens); };
   }
   panelClick(e) {
-    const G = this.G, S = G.S, t = e.target.closest('[data-id],[data-eq],[data-act],[data-craft],[data-skill],[data-buy],[data-sell],[data-track],[data-abandon],[data-mabandon],button'); if (!t) return; const d = t.dataset;
-    if (d.id) { this.sel = d.id; }
-    else if (d.eq) { if (S.equip[d.eq] && d.eq !== 'weapon') G.unequip(d.eq); }
-    else if (d.act === 'equip') G.equip(this.sel); else if (d.act === 'use') { G.useItem(this.sel); if (!S.inv[this.sel]) this.sel = null; }
+    const G = this.G, S = G.S, t = e.target.closest('[data-id],[data-eq],[data-act],[data-filter],[data-gotab],[data-gslot],[data-gequip],[data-craft],[data-skill],[data-buy],[data-sell],[data-track],[data-abandon],[data-mabandon],button'); if (!t) return; const d = t.dataset;
+    if (performance.now() - (this._renderT || 0) < 250 && t.closest('.sheet,.glist')) return; // swallow a ghost click on freshly shown buttons
+    if (d.id) { this.sel = this.sel === d.id ? null : d.id; }
+    else if (d.filter) { this.filter = d.filter; this.sel = null; }
+    else if (d.gotab) { this.tab = d.gotab; this.gearSlot = d.slot || null; this._scrollSlot = d.slot || null; this._lastTab = null; }
+    else if (d.gslot) { this.gearSlot = this.gearSlot === d.gslot ? null : d.gslot; }
+    else if (d.gequip) { G.equip(d.gequip); this.gearSlot = null; G.save(); }
+    else if (d.eq) { this.tab = 'gear'; this.gearSlot = d.eq; this._lastTab = null; }
+    else if (d.act === 'desel') this.sel = null;
+    else if (d.act === 'unequip') { G.unequip(d.slot); G.ui.toast('Unequipped'); G.save(); }
+    else if (d.act === 'equip') { G.equip(this.sel); G.save(); } else if (d.act === 'use') { G.useItem(this.sel); if (!S.inv[this.sel]) this.sel = null; }
     else if (d.act === 'q0' || d.act === 'q1') { S.quick[+d.act[1]] = this.sel; this.toast('Set to quick slot'); }
     else if (d.act === 'drop') { G.take(this.sel, 1); if (!S.inv[this.sel]) this.sel = null; }
     else if (d.craft) G.craft(d.craft); else if (d.skill) G.learn(d.skill);
@@ -198,7 +230,7 @@ export class UI {
     else if (t.id === 'mute') G.audio.setMuted(!G.audio.muted); else if (t.id === 'fpsB') { G.showFps = !G.showFps; $('fps').classList.toggle('hidden', !G.showFps); }
     else if (t.id === 'quit') { G.save(); location.reload(); return; } else if (t.id === 'cred') { this.closePanel(); this.credits(); return; }
     else return;
-    G.audio.click(); this.renderPanel();
+    G.audio.click(); this.renderPanel(); this._renderT = performance.now();
   }
   drawBigMap(c) {
     const G = this.G, g = c.getContext('2d'), N = c.width, k = N / 600; g.drawImage(this.mapTex, 0, 0, N, N);
